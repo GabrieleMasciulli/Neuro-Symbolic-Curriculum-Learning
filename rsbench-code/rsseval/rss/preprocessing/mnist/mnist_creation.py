@@ -276,7 +276,16 @@ def load_data(data_file, data_folder, c_sup=1, which_c=[-1], args=None):
     val_set = nMNIST("val", data_path=data_path, args=args)
     test_set = nMNIST("test", data_path=data_path, args=args)
 
-    r_seq = np.load("data/rn.npy")
+    # CWD-independent path (notebooks/scripts may run from different folders)
+    rss_root = Path(__file__).resolve().parents[2]
+    r_seq_path = rss_root / "data" / "rn.npy"
+    if r_seq_path.exists():
+        r_seq = np.load(r_seq_path)
+    else:
+        try:
+            r_seq = np.load("data/rn.npy")
+        except FileNotFoundError:
+            r_seq = generate_r_seq(len(train_set))
     # Generate deterministic random sequence
     # r_seq = generate_r_seq(len(train_set))
 

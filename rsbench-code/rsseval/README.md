@@ -32,8 +32,8 @@ year = {2020}}
 
 @ARTICLE{sawada2022cbm-auc,
   author={Sawada, Yoshihide and Nakamura, Keigo},
-  journal={IEEE Access}, 
-  title={Concept Bottleneck Model With Additional Unsupervised Concepts}, 
+  journal={IEEE Access},
+  title={Concept Bottleneck Model With Additional Unsupervised Concepts},
   year={2022},
   volume={10},
   number={},
@@ -69,54 +69,64 @@ In this setting, which is the same as the one presented in [Marconato et al. (20
 
 ## Structure of the code
 
-* The code structure is similar to [Marconato et al. (2024) bears](https://github.com/samuelebortolotti/bears):
+- The code structure is similar to [Marconato et al. (2024) bears](https://github.com/samuelebortolotti/bears):
 
-    * ``backbones`` contains the architecture of the NNs used.
-    * ``data`` should contain the data. 
-    * ``datasets`` cointains the dataset classes used for evaluation. If you want to add a dataset it has to be located here.
-    *  ``models`` contains all models used to benchmark the presence of RSs. Here, you can find DPL, LTN, CBMs, standard NNs and CLIP.
-    * ``utils`` contains the training loop, the losses, the metrics and (only wandb) loggers. Utils also contains `tcav`, the classes used to extract tcav scores out of neural models and `tcav/notebook` for evaluation.
-    * ``notebooks`` contains some notebooks for evaluation.
-    * ``preprocessing`` contains the classes used for CLIP embedding preprocessing.
-    * ``run_start.sh`` to run a single experiment. 
+  - `backbones` contains the architecture of the NNs used.
+  - `data` should contain the data.
+  - `datasets` cointains the dataset classes used for evaluation. If you want to add a dataset it has to be located here.
+  - `models` contains all models used to benchmark the presence of RSs. Here, you can find DPL, LTN, CBMs, standard NNs and CLIP.
+  - `utils` contains the training loop, the losses, the metrics and (only wandb) loggers. Utils also contains `tcav`, the classes used to extract tcav scores out of neural models and `tcav/notebook` for evaluation.
+  - `notebooks` contains some notebooks for evaluation.
+  - `preprocessing` contains the classes used for CLIP embedding preprocessing.
+  - `run_start.sh` to run a single experiment.
 
 ## Train your model
 
 To get started with training your models, navigate to the `rss` directory and use the following commands. Adjust the hyperparameters to suit your specific needs.
 
 **DPL Model on MNIST-Even-Odd:**
+
 ```sh
 python main.py --dataset shortmnist --model mnistdpl --n_epochs 2 --lr 0.001 --seed 0 \
 --batch_size 64 --exp_decay 0.9 --c_sup 0 --task addition --backbone conceptizer
 ```
+
 This command runs the DPL model on the MNIST-Even-Odd dataset. You can modify the hyperparameters like `--n_epochs` or `--lr` for different training conditions.
 
 **LTN Model on MNIST-Even-Odd:**
+
 ```sh
 python main.py --dataset shortmnist --model mnistltn --n_epochs 2 --lr 0.001 --seed 0 \
 --batch_size 64 --exp_decay 0.9 --c_sup 0 --task addition --backbone conceptizer
 ```
+
 Execute this to train the LTN model on the MNIST-Even-Odd dataset. Customize the parameters as needed to better suit your model's requirements.
 
 **CBM Model on MNIST-Even-Odd:**
+
 ```sh
 python main.py --dataset shortmnist --model mnistcbm --n_epochs 2 --lr 0.001 --seed 0 \
 --batch_size 64 --exp_decay 0.9 --c_sup 0.05 --task addition --backbone conceptizer
 ```
+
 This command is for running the CBM model on the MNIST-Even-Odd dataset. The `--c_sup` parameter is set to 0.05 here, so as to give few concept supervision to the model. You can adjust it based on your experiment needs.
 
 **NN Model on MNIST-Even-Odd:**
+
 ```sh
 python main.py --dataset shortmnist --model mnistnn --n_epochs 2 --lr 0.001 --seed 0 \
 --batch_size 64 --exp_decay 0.9 --c_sup 0.05 --task addition --backbone neural
 ```
+
 Run the NN model on MNIST-Even-Odd with this command. Notice that the `--backbone` is set to `neural`.
 
 **CLIP Model on MNIST-Even-Odd:**
+
 ```sh
 python main.py --dataset clipshortmnist --model mnistnn --n_epochs 2 --lr 0.001 --seed 0 \
 --batch_size 64 --exp_decay 0.9 --c_sup 0 --task addition --backbone neural --joint
 ```
+
 Use this to execute the CLIP model on the MNIST-Even-Odd dataset. The dataset here is preprocessed with CLIP embeddings (`clipshortmnist`), while the model parameter remains `mnistnn`.
 
 ### How to Evaluate Different Models and Datasets
@@ -156,7 +166,7 @@ This command provides detailed information on the different options you can use 
 
 ## Issues report, bug fixes, and pull requests
 
-For all kind of problems do not hesitate to contact me. If you have additional mitigation strategies that you want to include as for others to test, please send me a pull request. 
+For all kind of problems do not hesitate to contact me. If you have additional mitigation strategies that you want to include as for others to test, please send me a pull request.
 
 ## Makefile
 

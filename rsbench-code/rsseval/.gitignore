@@ -7,12 +7,12 @@ test_slurm.sh
 /logs
 datasets/__pycache__
 venv/
+.venv/
 .python-version
 rss/embeddings_resnet/
 *.csv
 *.pth
 *.pdf
-*.txt
 *.sh
 best_model
 resnet_prova.py

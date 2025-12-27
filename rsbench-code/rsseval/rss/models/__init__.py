@@ -1,13 +1,24 @@
-import os
 import importlib
+from pathlib import Path
 
 
 def get_all_models():
-    return [
-        model.split(".")[0]
-        for model in os.listdir("models")
-        if not model.find("__") > -1 and "py" in model
-    ]
+    """Return all model module names in this package.
+
+    NOTE: Must be independent from the current working directory (e.g., notebooks).
+    """
+
+    package_dir = Path(__file__).resolve().parent
+    models = []
+    for path in package_dir.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix != ".py":
+            continue
+        if path.name.startswith("__"):
+            continue
+        models.append(path.stem)
+    return sorted(models)
 
 
 names = {}

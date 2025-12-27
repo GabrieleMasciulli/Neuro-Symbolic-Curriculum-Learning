@@ -58,6 +58,29 @@ def compute_coverage(confusion_matrix):
     return coverage
 
 
+def compute_coverage_hard(confusion_matrix):
+        """Compute a stricter ("hard") coverage of a confusion matrix.
+
+        A predicted class (column) counts as "covered" only if:
+        - it is non-empty, and
+        - all samples assigned to that predicted class come from a single true class
+            (i.e., the column mass is concentrated in exactly one row).
+
+        This is useful for a harder concept-collapse estimate.
+        """
+
+        cm = np.asarray(confusion_matrix)
+        if cm.size == 0:
+                return 0.0
+
+        col_sums = cm.sum(axis=0)
+        max_values = cm.max(axis=0)
+
+        # Non-empty and "pure" columns only.
+        pure = (col_sums > 0) & np.isclose(max_values, col_sums)
+        return float(np.mean(pure))
+
+
 def plot_confusion_matrix(
     y_true, y_pred, labels=None, title="Confusion Matrix", save_path=None
 ):

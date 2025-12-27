@@ -1,15 +1,26 @@
-import os
 import inspect
 import importlib
+from pathlib import Path
 from argparse import Namespace
 
 
 def get_all_datasets():
-    return [
-        data.split(".")[0]
-        for data in os.listdir("datasets")
-        if not data.find("__") > -1 and "py" in data
-    ]
+    """Return all dataset module names in this package.
+
+    NOTE: Must be independent from the current working directory (e.g., notebooks).
+    """
+
+    package_dir = Path(__file__).resolve().parent
+    datasets = []
+    for path in package_dir.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix != ".py":
+            continue
+        if path.name.startswith("__"):
+            continue
+        datasets.append(path.stem)
+    return sorted(datasets)
 
 
 NAMES = {}
