@@ -63,6 +63,9 @@ class HALFMNIST(BaseDataset):
     def get_concept_labels(self):
         return [str(i) for i in range(9)]
 
+    def get_labels(self):
+        return [str(i) for i in range(9)]
+
     def filtrate(self, train_dataset, val_dataset, test_dataset):
 
         train_c_mask1 = (
