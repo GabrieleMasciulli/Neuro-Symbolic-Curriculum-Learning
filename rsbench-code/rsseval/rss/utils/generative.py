@@ -35,7 +35,7 @@ def conditional_gen(model, pC=None):
     return decode
 
 
-def recon_visaulization(out_dict):
+def recon_visualization(out_dict):
     """Recon visualization method
 
     Args:
