@@ -172,6 +172,12 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         help="Weights and Biases project name where the runs have to be logged.",
     )
     parser.add_argument(
+        "--group_name",
+        default="",
+        type=str,
+        help="Weights and Biases group name where the runs have to be logged.",
+    )
+    parser.add_argument(
         "--entity",
         default="",
         type=str,
@@ -182,6 +188,20 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         default=False,
         action="store_true",
         help="Whether to employ BOIA OOD-knowledge (Ambulance) only for DPL",
+    )
+    
+    # parameters for curriculum learning
+    parser.add_argument(
+        "--curriculum",
+        action="store_true",
+        default=False,
+        help="Whether to use curriculum learning based on class-specific risks.",
+    )
+    parser.add_argument(
+        "--risk_update_freq",
+        type=int,
+        default=5,
+        help="Frequency (in epochs) to update class-specific risks during curriculum learning.",
     )
 
 

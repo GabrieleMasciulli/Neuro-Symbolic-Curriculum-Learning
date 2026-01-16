@@ -1,5 +1,6 @@
 from datasets.utils.base_dataset import BaseDataset, get_loader
 from datasets.utils.mnist_creation import load_2MNIST
+from utils.risk_curriculum_sampler import RiskCurriculumSampler
 from backbones.addmnist_joint import MNISTPairsEncoder, MNISTPairsDecoder
 from backbones.addmnist_single import MNISTSingleEncoder
 from backbones.mnistcnn import MNISTAdditionCNN
@@ -80,8 +81,9 @@ class SHORTMNIST(BaseDataset):
         test_sample_weights = test_class_weights[test_targets]
         ood_sample_weights = ood_class_weights[ood_targets]
         ood_sample_weights_2 = ood_class_weights_2[ood_targets_2]
+        
 
-        # Create WeightedRandomSampler
+        # Create Samplers
         self.train_sampler = WeightedRandomSampler(
             weights=train_sample_weights,
             num_samples=len(train_sample_weights),
@@ -107,6 +109,25 @@ class SHORTMNIST(BaseDataset):
             num_samples=len(ood_sample_weights_2),
             replacement=True,
         )
+        
+        # Initialize curriculum sampler if curriculum learning is enabled
+        self.curriculum_sampler = None
+        self.concept_risks = None
+        if hasattr(self.args, 'curriculum') and self.args.curriculum:
+            risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+            if os.path.exists(risk_path):
+                self.concept_risks = np.load(risk_path)
+                print(f"\n--- Curriculum Learning Enabled ---")
+                print(f"Loaded concept risks from {risk_path}")
+                print(f"Concept Risks: {self.concept_risks}\n")
+                # Initialize with phase 1.0 (will be updated per epoch in training loop)
+                self.curriculum_sampler = RiskCurriculumSampler(
+                    self.dataset_train, self.concept_risks, current_phase=1.0
+                )
+                # Replace train_sampler with curriculum_sampler
+                self.train_sampler = self.curriculum_sampler
+            else:
+                print(f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler.")
 
     def get_backbone(self):
         if self.args.joint:
@@ -362,6 +383,10 @@ class SHORTMNIST(BaseDataset):
         train_dataset.concepts = train_dataset.concepts[train_mask]
         val_dataset.concepts = val_dataset.concepts[val_mask]
         test_dataset.concepts = test_dataset.concepts[test_mask]
+        
+        train_dataset.real_concepts = train_dataset.real_concepts[train_mask]
+        val_dataset.real_concepts = val_dataset.real_concepts[val_mask]
+        test_dataset.real_concepts = test_dataset.real_concepts[test_mask]
 
         train_dataset.targets = np.array(train_dataset.targets)[train_mask]
         val_dataset.targets = np.array(val_dataset.targets)[val_mask]

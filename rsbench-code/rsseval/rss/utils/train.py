@@ -10,7 +10,9 @@ from tqdm import tqdm
 from torchvision.utils import make_grid
 from utils.wandb_logger import *
 from utils.status import progress_bar
-from datasets.utils.base_dataset import BaseDataset
+from datasets.utils.base_dataset import BaseDataset, get_loader
+from utils.risk_curriculum_sampler import RiskCurriculumSampler
+from utils.class_specific_risk import compute_class_specific_risks_from_model
 from models.mnistdpl import MnistDPL
 from utils.dpl_loss import ADDMNIST_DPL
 from utils.metrics import (
@@ -346,6 +348,9 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     if args.dataset in ["shortmnist"] and args.joint:
         to_add += "_joint"
+        
+    if args.curriculum:
+        to_add += "_curriculum"
 
     save_path = f"best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
 
@@ -365,6 +370,15 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     train_loader, val_loader, test_loader = dataset.get_data_loaders()
     dataset.print_stats()
+    
+    if args.curriculum:
+        # Curriculum learning setup - use sampler from dataset if available
+        curriculum_steps = 5
+        curriculum_schedule = np.linspace(1.0 / curriculum_steps, 1.0, num=curriculum_steps)  # Example schedule from 10% to 100% using curriculum_steps
+        curriculum_sampler = getattr(dataset, 'curriculum_sampler', None)
+        concept_risks = np.load(f"class_specific_risks_{args.dataset}_{args.model}_{args.seed}.npy") if curriculum_sampler is not None else None
+        print(f"initial risks: {concept_risks}")
+    
     scheduler = torch.optim.lr_scheduler.ExponentialLR(model.opt, args.exp_decay)
     w_scheduler = None
     if args.warmup_steps > 0:
@@ -374,7 +388,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         fprint("\n---wandb on\n")
         wandb.init(
             project=args.project,
-            entity=args.wandb,
+            group=args.group_name,
             name=str(args.dataset) + "_" + str(args.model),
             config=args,
         )
@@ -392,8 +406,39 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     for epoch in range(args.n_epochs):
         model.train()
+        
+        # Curriculum learning: update sampler phase based on epoch
+        if args.curriculum and curriculum_sampler is not None and concept_risks is not None:
+            # Determine curriculum phase based on epoch
+            phase_epochs = args.n_epochs // len(curriculum_schedule)
+            phase_index = min(epoch // phase_epochs, len(curriculum_schedule) - 1)
+            phase = curriculum_schedule[phase_index]  # Select phase based on current epoch
+            
+            fprint(f"\nEpoch {epoch}: Training on easiest {int(phase*100)}% of data.")
+            
+            # Update the curriculum sampler's phase and recreate the loader
+            curriculum_sampler.current_phase = phase
+            # Recompute sorted indices based on new phase
+            curriculum_sampler.sorted_indices = np.argsort(curriculum_sampler.sample_difficulties)
+            train_loader = get_loader(
+                dataset.dataset_train, args.batch_size, val_test=False, sampler=curriculum_sampler
+            )
 
         ys, y_true, cs, cs_true = None, None, None, None
+
+        # Track unique concepts shown in this epoch
+        
+        if args.curriculum:
+            epoch_concepts = {}
+            # Get all sampled indices for this epoch if curriculum is active
+            sampled_indices = None
+            if curriculum_sampler is not None:
+                sampled_indices = list(train_loader.sampler)
+                # Collect all concepts from sampled data
+                all_epoch_real_concepts = dataset.dataset_train.real_concepts[sampled_indices]
+                for concept_pair in all_epoch_real_concepts:
+                    epoch_concepts[int(concept_pair[0])] = epoch_concepts.get(int(concept_pair[0]), 0) + 1
+                    epoch_concepts[int(concept_pair[1])] = epoch_concepts.get(int(concept_pair[1]), 0) + 1
 
         for i, data in enumerate(train_loader):
             images, labels, concepts = data
@@ -418,9 +463,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 conc_preds = torch.stack(conc_preds, dim=0)
 
             out_dict = model(images)
-            out_dict.update({"LABELS": labels, "CONCEPTS": concepts})
-
-            # out_dict.update({"INPUTS": images, "LABELS": labels, "CONCEPTS": concepts})
+            out_dict.update({"INPUTS": images, "LABELS": labels, "CONCEPTS": concepts})
 
             if conc_sup is not None:
                 out_dict.update({"conc_preds": conc_preds})
@@ -447,6 +490,14 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             if i % 10 == 0:
                 progress_bar(i, len(train_loader) - 9, epoch, loss.item())
+
+        # Print summary of unique concepts shown in this epoch
+        if args.curriculum and curriculum_sampler is not None and len(epoch_concepts) > 0:
+            print(f"\n=== Epoch {epoch} Concept Summary ===")
+            for concept_id, count in sorted(epoch_concepts.items()):
+                print(f"  Concept {concept_id}: {count} samples")
+            print(f"Total unique concepts: {len(epoch_concepts.keys())} / 10")
+            print("=" * 50)
 
         if args.task == "mnmath":
             y_pred = (ys > 0.5).to(torch.long)
@@ -504,6 +555,28 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
         ### LOGGING ###
         fprint("  ACC C", cacc, "  ACC Y", yacc, "F1 Y", f1)
+        
+        # Recompute class-specific risks periodically for curriculum learning
+        if args.curriculum and curriculum_sampler is not None and hasattr(args, 'risk_update_freq'):
+            risk_update_freq = args.risk_update_freq
+            if (epoch + 1) % risk_update_freq == 0 and epoch > 15:
+                fprint(f"\n--- Recomputing class-specific risks at epoch {epoch + 1} ---")
+                num_classes = 10 if args.dataset != "halfmnist" else 5
+                
+                # Recompute risks on validation set
+                new_risks, partial_risk = compute_class_specific_risks_from_model(
+                    model, val_loader, args.dataset, num_classes=num_classes, verbose=True
+                )
+                
+                # Update the curriculum sampler with new risks
+                dataset.concept_risks = new_risks
+                curriculum_sampler.risk_scores = new_risks
+                curriculum_sampler.sample_difficulties = curriculum_sampler._score_samples(
+                    dataset.dataset_train.real_concepts
+                )
+                curriculum_sampler.sorted_indices = np.argsort(curriculum_sampler.sample_difficulties)
+                
+                fprint(f"New risks: {new_risks}")
 
         if not args.tuning and f1 > best_f1:
             print("Saving...")

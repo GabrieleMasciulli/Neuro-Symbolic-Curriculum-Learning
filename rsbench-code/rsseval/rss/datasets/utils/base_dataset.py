@@ -66,8 +66,8 @@ def get_loader(dataset, batch_size, num_workers=4, val_test=False, sampler=None)
             sampler=sampler,
         )
     else:
-
-        if sampler != None:
+        # Use the provided sampler if one is given, otherwise create a WeightedRandomSampler
+        if sampler is None:
             labels = dataset.targets
             tot = np.max(labels)
 
