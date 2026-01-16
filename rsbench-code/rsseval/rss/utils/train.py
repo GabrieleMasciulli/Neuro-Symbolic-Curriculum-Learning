@@ -21,7 +21,7 @@ from utils.metrics import (
     mean_entropy,
     accuracy_binary,
 )
-from utils.generative import conditional_gen, recon_visaulization
+from utils.generative import conditional_gen, recon_visualization
 from utils import fprint
 import matplotlib.pyplot as plt
 
@@ -596,9 +596,9 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 lr=float(scheduler.get_last_lr()[0]),
             )
 
-    if args.dataset in ["clipshortmnist", "shortmnist"]:
-        pass
-    elif not args.tuning:
+    # if args.dataset in ["clipshortmnist", "shortmnist"]:
+    #     pass
+    if not args.tuning:
         # Evaluate performances on val or test
         if args.validate:
             y_true, c_true, y_pred, c_pred, p_cs, p_ys, p_cs_all, p_ys_all = (
@@ -767,7 +767,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 images = wandb.Image(list_images, caption="Generated samples")
                 wandb.log({"Conditional Gen": images})
 
-                list_images = make_grid(recon_visaulization(out_dict), nrow=8)
+                list_images = make_grid(recon_visualization(out_dict), nrow=8)
                 images = wandb.Image(list_images, caption="Reconstructed samples")
                 wandb.log({"Reconstruction": images})
 
