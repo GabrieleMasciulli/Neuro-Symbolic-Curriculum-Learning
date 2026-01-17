@@ -37,7 +37,7 @@ class MnistDPLRec(DeepProblogModel):
         c_split=(),
         args=None,
         model_dict=None,
-        n_facts=20,
+        n_facts=10,
         nr_classes=19,
     ):
         """Initialize method
@@ -62,6 +62,9 @@ class MnistDPLRec(DeepProblogModel):
             n_facts=n_facts,
             nr_classes=nr_classes,
         )
+        
+        self.args = args
+        self.n_facts = n_facts
 
         # add decoder
         self.decoder = decoder
@@ -71,7 +74,7 @@ class MnistDPLRec(DeepProblogModel):
         self.c_split = c_split
 
         # Worlds-queries matrix
-        self.w_q = build_worlds_queries_matrix(2, 10)
+        self.w_q = build_worlds_queries_matrix(2, c_split[0])
 
         # opt and device
         self.opt = None
@@ -109,7 +112,7 @@ class MnistDPLRec(DeepProblogModel):
             for i in range(len(self.c_split)):
                 latents.append(F.gumbel_softmax(c[:, i, :], tau=1, hard=True, dim=-1))
 
-        latents = torch.cat(latents, dim=1)
+        latents = torch.cat(latents, dim=1) # shape: batch_size, latent_dim*n_images + c_dim*n_images
 
         # 2) pass to decoder
         recs = self.decoder(latents)
@@ -225,7 +228,7 @@ class MnistDPLRec(DeepProblogModel):
             Z2 = torch.sum(prob_digit2, dim=-1, keepdim=True)
         prob_digit2 = prob_digit2 / Z2  # Normalization
 
-        return torch.stack([prob_digit1, prob_digit2], dim=1).view(-1, 2, 10)
+        return torch.stack([prob_digit1, prob_digit2], dim=1).view(-1, 2, self.c_split[0])
 
     @staticmethod
     def get_loss(args):
@@ -240,8 +243,11 @@ class MnistDPLRec(DeepProblogModel):
         Raises:
             err: NotImplementedError if the loss function is not implemented
         """
-        if args.dataset in ["addmnist", "shortmnist"]:
-            return ADDMNIST_DPL(ADDMNIST_Cumulative)
+        if args.dataset in ["addmnist", "shortmnist", "halfmnist"]:
+            nr_classes = 19
+            if args.dataset == "halfmnist":
+                nr_classes = 9
+            return ADDMNIST_DPL(ADDMNIST_Cumulative, nr_classes=nr_classes)
         else:
             return NotImplementedError("Wrong dataset choice")
 

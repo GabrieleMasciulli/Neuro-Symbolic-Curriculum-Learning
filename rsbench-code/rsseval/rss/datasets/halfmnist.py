@@ -44,7 +44,7 @@ class HALFMNIST(BaseDataset):
                 return DisjointMNISTAdditionCNN(n_images=self.get_split()[0]), None
 
             return MNISTSingleEncoder(c_dim=5), MNISTPairsDecoder(
-                c_dim=10, latent_dim=10
+                c_dim=10, latent_dim=160
             )
         else:
             if self.args.backbone == "neural":
@@ -193,6 +193,10 @@ class HALFMNIST(BaseDataset):
         train_dataset.concepts = train_dataset.concepts[train_mask]  # [:2000, :]
         val_dataset.concepts = val_dataset.concepts[val_mask]
         test_dataset.concepts = test_dataset.concepts[test_mask]
+        
+        train_dataset.real_concepts = train_dataset.real_concepts[train_mask]
+        val_dataset.real_concepts = val_dataset.real_concepts[val_mask]
+        test_dataset.real_concepts = test_dataset.real_concepts[test_mask]
 
         train_dataset.targets = np.array(train_dataset.targets)[train_mask]  # [:2000]
         val_dataset.targets = np.array(val_dataset.targets)[val_mask]

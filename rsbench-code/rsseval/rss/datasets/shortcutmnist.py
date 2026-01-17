@@ -135,11 +135,10 @@ class SHORTMNIST(BaseDataset):
                 return MNISTAdditionCNN(), None
             return MNISTPairsEncoder(), MNISTPairsDecoder()
         else:
-
             if self.args.backbone == "neural":
                 return DisjointMNISTAdditionCNN(n_images=self.get_split()[0]), None
 
-            return MNISTSingleEncoder(), MNISTPairsDecoder()
+            return MNISTSingleEncoder(latent_dim=10), MNISTPairsDecoder(latent_dim=200)
 
     def get_split(self):
         if self.args.joint:

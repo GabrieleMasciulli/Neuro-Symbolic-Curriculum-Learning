@@ -14,20 +14,27 @@ def conditional_gen(model, pC=None):
     Returns:
         out: decoder output
     """
+    num_chunks = model.n_images * len(model.c_split)
+    z_dim_chunk = model.decoder.latent_dim // num_chunks
+
+    zs = torch.randn((8, num_chunks, z_dim_chunk), device=model.device)
+
     # select whether generate at random or not
     if pC is None:
+        # Generate random concept probabilities
+        # We assume model.encoder.c_dim is the dimension per chunk
         pC = 5 * torch.randn(
-            (8, model.n_images, model.encoder.c_dim), device=model.device
+            (8, num_chunks, model.encoder.c_dim), device=model.device
         )
         # pC = torch.softmax(pC, dim=-1)
 
-    zs = torch.randn((8, model.n_images, model.encoder.latent_dim), device=model.device)
-
     latents = []
+    chunk_idx = 0
     for _ in range(model.n_images):
         for i in range(len(model.c_split)):
-            latents.append(zs[:, i, :])
-            latents.append(F.gumbel_softmax(pC[:, i, :], tau=1, hard=True, dim=-1))
+            latents.append(zs[:, chunk_idx, :])
+            latents.append(F.gumbel_softmax(pC[:, chunk_idx, :], tau=1, hard=True, dim=-1))
+            chunk_idx += 1
 
     # generated images
     decode = model.decoder(torch.cat(latents, dim=1)).detach()
