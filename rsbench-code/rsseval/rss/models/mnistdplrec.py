@@ -37,7 +37,7 @@ class MnistDPLRec(DeepProblogModel):
         c_split=(),
         args=None,
         model_dict=None,
-        n_facts=10,
+        n_facts=20,
         nr_classes=19,
     ):
         """Initialize method
@@ -81,6 +81,24 @@ class MnistDPLRec(DeepProblogModel):
         self.device = get_device()
         self.w_q = self.w_q.to(self.device)
 
+        # Fix for dimensionality mismatch between SingleEncoder (170) and PairsDecoder (20)
+        enc_latent_dim = getattr(self.encoder, "latent_dim", 16)
+        enc_c_dim = getattr(self.encoder, "c_dim", 10)
+        
+        # Calculate encoder output size: n_images * (continuous + discrete)
+        # Continuous is flattened (latent_dim * c_dim), Discrete is sum of split sizes
+        flat_continuous = enc_latent_dim * enc_c_dim
+        flat_discrete = sum(self.c_split)
+        encoder_out_dim = self.n_images * (flat_continuous + flat_discrete)
+
+        # Decoder expected input size
+        decoder_in_dim = self.decoder.dense.in_features
+
+        if encoder_out_dim != decoder_in_dim:
+            self.projection = nn.Linear(encoder_out_dim, decoder_in_dim)
+        else:
+            self.projection = None
+
     def forward(self, x):
         """Forward method
 
@@ -112,7 +130,14 @@ class MnistDPLRec(DeepProblogModel):
             for i in range(len(self.c_split)):
                 latents.append(F.gumbel_softmax(c[:, i, :], tau=1, hard=True, dim=-1))
 
-        latents = torch.cat(latents, dim=1) # shape: batch_size, latent_dim*n_images + c_dim*n_images
+        latents = torch.cat(latents, dim=1) 
+
+        # Project latents if dimensions mismatch
+        if self.projection is not None:
+            # Ensure projection is on correct device
+            if self.projection.weight.device != latents.device:
+                self.projection = self.projection.to(latents.device)
+            latents = self.projection(latents)
 
         # 2) pass to decoder
         recs = self.decoder(latents)
@@ -269,3 +294,5 @@ class MnistDPLRec(DeepProblogModel):
     def to(self, device):
         super().to(device)
         self.w_q = self.w_q.to(device)
+        if self.projection is not None:
+            self.projection = self.projection.to(device)

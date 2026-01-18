@@ -44,7 +44,7 @@ class HALFMNIST(BaseDataset):
                 return DisjointMNISTAdditionCNN(n_images=self.get_split()[0]), None
 
             return MNISTSingleEncoder(c_dim=5), MNISTPairsDecoder(
-                c_dim=10, latent_dim=160
+                c_dim=10, latent_dim=10
             )
         else:
             if self.args.backbone == "neural":
