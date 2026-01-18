@@ -351,6 +351,9 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         
     if args.curriculum:
         to_add += "_curriculum"
+        
+    if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
+        to_add += f"_w-rec{args.w_rec}"
 
     save_path = f"best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
 
@@ -385,11 +388,21 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         w_scheduler = GradualWarmupScheduler(model.opt, 1.0, args.warmup_steps)
 
     if not args.tuning and args.wandb is not None:
+        to_add = ""
+        
+        if args.curriculum:
+            to_add += "-curriculum"
+            
+        if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
+            to_add += f"-w_rec{args.w_rec}"
+        
+        run_name = f"{args.dataset}-{args.model}-seed{args.seed}{to_add}"
+        
         fprint("\n---wandb on\n")
         wandb.init(
             project=args.project,
             group=args.group_name,
-            name=str(args.dataset) + "_" + str(args.model),
+            name=run_name,
             config=args,
         )
 
