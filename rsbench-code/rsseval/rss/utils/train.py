@@ -11,7 +11,6 @@ from torchvision.utils import make_grid
 from utils.wandb_logger import *
 from utils.status import progress_bar
 from datasets.utils.base_dataset import BaseDataset, get_loader
-from utils.risk_curriculum_sampler import RiskCurriculumSampler
 from utils.class_specific_risk import compute_class_specific_risks_from_model
 from models.mnistdpl import MnistDPL
 from utils.dpl_loss import ADDMNIST_DPL
@@ -342,7 +341,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     # best f1
     best_f1 = 0.0
 
-    to_add = ""
+    to_add = args.to_add
     if args.model in ["kandcbm", "sddoiacbm", "boiacbm", "mnistcbm"]:
         to_add = "_partial_sup"
 
@@ -350,12 +349,12 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         to_add += "_joint"
         
     if args.curriculum:
-        to_add += "_curriculum"
+        to_add += f"_curriculum_{args.risk_type}"
         
     if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
         to_add += f"_w-rec{args.w_rec}"
 
-    save_path = f"best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
+    save_path = f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
 
     # save embeddings variable
     save_embeddings_flag = False
@@ -374,13 +373,10 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     train_loader, val_loader, test_loader = dataset.get_data_loaders()
     dataset.print_stats()
     
-    if args.curriculum:
+    if args.curriculum and args.curriculum_steps is not None:
         # Curriculum learning setup - use sampler from dataset if available
-        curriculum_steps = 5
-        curriculum_schedule = np.linspace(1.0 / curriculum_steps, 1.0, num=curriculum_steps)  # Example schedule from 10% to 100% using curriculum_steps
+        curriculum_schedule = np.linspace(1.0 / args.curriculum_steps, 1.0, num=args.curriculum_steps)
         curriculum_sampler = getattr(dataset, 'curriculum_sampler', None)
-        concept_risks = np.load(f"class_specific_risks_{args.dataset}_{args.model}_{args.seed}.npy") if curriculum_sampler is not None else None
-        print(f"initial risks: {concept_risks}")
     
     scheduler = torch.optim.lr_scheduler.ExponentialLR(model.opt, args.exp_decay)
     w_scheduler = None
@@ -421,7 +417,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         model.train()
         
         # Curriculum learning: update sampler phase based on epoch
-        if args.curriculum and curriculum_sampler is not None and concept_risks is not None:
+        if args.curriculum and curriculum_sampler is not None:
             # Determine curriculum phase based on epoch
             phase_epochs = args.n_epochs // len(curriculum_schedule)
             phase_index = min(epoch // phase_epochs, len(curriculum_schedule) - 1)
@@ -431,8 +427,6 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             
             # Update the curriculum sampler's phase and recreate the loader
             curriculum_sampler.current_phase = phase
-            # Recompute sorted indices based on new phase
-            curriculum_sampler.sorted_indices = np.argsort(curriculum_sampler.sample_difficulties)
             train_loader = get_loader(
                 dataset.dataset_train, args.batch_size, val_test=False, sampler=curriculum_sampler
             )
@@ -440,7 +434,6 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         ys, y_true, cs, cs_true = None, None, None, None
 
         # Track unique concepts shown in this epoch
-        
         if args.curriculum:
             epoch_concepts = {}
             # Get all sampled indices for this epoch if curriculum is active
@@ -570,7 +563,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         fprint("  ACC C", cacc, "  ACC Y", yacc, "F1 Y", f1)
         
         # Recompute class-specific risks periodically for curriculum learning
-        if args.curriculum and curriculum_sampler is not None and hasattr(args, 'risk_update_freq'):
+        if args.curriculum and args.risk_type == "class" and curriculum_sampler is not None and hasattr(args, 'risk_update_freq'):
             risk_update_freq = args.risk_update_freq
             if (epoch + 1) % risk_update_freq == 0 and epoch > 15:
                 fprint(f"\n--- Recomputing class-specific risks at epoch {epoch + 1} ---")

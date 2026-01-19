@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Sampler, DataLoader
 
-class RiskCurriculumSampler(Sampler):
+class ClassSpecificRiskCurriculumSampler(Sampler):
     def __init__(self, dataset, risk_scores, current_phase=1.0):
         """
         Args:
@@ -61,3 +61,40 @@ class RiskCurriculumSampler(Sampler):
 
     def __len__(self):
         return int(len(self.dataset) * self.current_phase)
+    
+class InstanceRiskCurriculumSampler(Sampler):
+    def __init__(self, dataset, instance_risks, current_phase=1.0):
+        """
+        Args:
+            dataset: The PyTorch dataset.
+            instance_risks: A 1D numpy array or list of scores, one for each sample 
+                            in the dataset. (Low score = Easy, High score = Hard).
+            current_phase: Float (0.0 to 1.0). Percentage of data to use.
+        """
+        self.dataset = dataset
+        self.current_phase = current_phase
+        
+        if torch.is_tensor(instance_risks):
+            self.instance_risks = instance_risks.cpu().numpy()
+        else:
+            self.instance_risks = np.array(instance_risks)
+            
+        # sort indices by difficulty (Low Risk -> High Risk)
+        self.sorted_indices = np.argsort(self.instance_risks)
+        
+    def __iter__(self):
+        # determine how many samples are allowed in this phase
+        num_samples = len(self.dataset)
+        cutoff = int(num_samples * self.current_phase)
+        cutoff = max(cutoff, 64) 
+        
+        # select the easiest 'cutoff' samples
+        active_indices = self.sorted_indices[:cutoff]
+        
+        np.random.shuffle(active_indices)
+        
+        return iter(active_indices)
+
+    def __len__(self):
+        cutoff = int(len(self.dataset) * self.current_phase)
+        return max(cutoff, 64)

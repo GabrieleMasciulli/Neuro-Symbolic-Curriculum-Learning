@@ -1,6 +1,6 @@
 from datasets.utils.base_dataset import BaseDataset, get_loader
 from datasets.utils.mnist_creation import load_2MNIST
-from utils.risk_curriculum_sampler import RiskCurriculumSampler
+from utils.risk_curriculum_sampler import ClassSpecificRiskCurriculumSampler, InstanceRiskCurriculumSampler
 from backbones.addmnist_joint import MNISTPairsEncoder, MNISTPairsDecoder
 from backbones.addmnist_single import MNISTSingleEncoder
 from backbones.mnistcnn import MNISTAdditionCNN
@@ -113,21 +113,35 @@ class SHORTMNIST(BaseDataset):
         # Initialize curriculum sampler if curriculum learning is enabled
         self.curriculum_sampler = None
         self.concept_risks = None
-        if hasattr(self.args, 'curriculum') and self.args.curriculum:
-            risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
-            if os.path.exists(risk_path):
-                self.concept_risks = np.load(risk_path)
-                print(f"\n--- Curriculum Learning Enabled ---")
-                print(f"Loaded concept risks from {risk_path}")
-                print(f"Concept Risks: {self.concept_risks}\n")
-                # Initialize with phase 1.0 (will be updated per epoch in training loop)
-                self.curriculum_sampler = RiskCurriculumSampler(
-                    self.dataset_train, self.concept_risks, current_phase=1.0
-                )
-                # Replace train_sampler with curriculum_sampler
-                self.train_sampler = self.curriculum_sampler
-            else:
-                print(f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler.")
+        if self.args.curriculum and self.args.risk_type:
+            if self.args.risk_type == "class":
+                risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                if os.path.exists(risk_path):
+                    self.concept_risks = np.load(risk_path)
+                    print(f"\n--- Curriculum Learning Enabled ---")
+                    print(f"Loaded concept risks from {risk_path}")
+                    print(f"Concept Risks: {self.concept_risks}\n")
+                    # Initialize with phase 1.0 (will be updated per epoch in training loop)
+                    self.curriculum_sampler = ClassSpecificRiskCurriculumSampler(
+                        self.dataset_train, self.concept_risks, current_phase=1.0
+                    )
+                    # Replace train_sampler with curriculum_sampler
+                    self.train_sampler = self.curriculum_sampler
+                else:
+                    print(f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler.")
+                    
+            elif self.args.risk_type == "instance":
+                print(f"\n--- Instance-Specific Curriculum Learning Enabled ---")
+                risk_path = f"instance_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                if os.path.exists(risk_path):
+                    instance_risks = np.load(risk_path)
+                    print(f"Loaded instance risks from {risk_path}")    
+                    # Initialize with phase 1.0 (will be updated per epoch in training loop)
+                    self.curriculum_sampler = InstanceRiskCurriculumSampler(
+                        self.dataset_train, instance_risks, current_phase=1.0
+                    )
+                    # Replace train_sampler with curriculum_sampler
+                    self.train_sampler = self.curriculum_sampler
 
     def get_backbone(self):
         if self.args.joint:

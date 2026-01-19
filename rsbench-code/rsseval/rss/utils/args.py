@@ -200,8 +200,29 @@ def add_experiment_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--risk_update_freq",
         type=int,
-        default=5,
+        default=None,
         help="Frequency (in epochs) to update class-specific risks during curriculum learning.",
+    )
+    parser.add_argument(
+        "--risk_type",
+        type=str,
+        default="class",
+        choices=["class", "pair", "instance"],
+        help="Which risk to use as the curriculum strategy",
+    )
+    parser.add_argument(
+        "--curriculum_steps",
+        type=int,
+        default=5,
+        help="Number of curriculum phases (from easy to hard)."
+    )
+    
+    # others
+    parser.add_argument(
+        "--to_add",
+        default="",
+        type=str,
+        help="To add at the end of the model name when saving."
     )
 
 
