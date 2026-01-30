@@ -106,7 +106,7 @@ class MnistDPL(DeepProblogModel):
             cs.append(lc)
         clen = len(cs[0].shape)
 
-        cs = torch.stack(cs, dim=1) if clen == 2 else torch.cat(cs, dim=1)
+        cs = torch.stack(cs, dim=1) if clen == 2 else torch.cat(cs, dim=1) # shape: (B, n_images, n_facts)
 
         # normalize concept preditions
         pCs = self.normalize_concepts(cs)
@@ -223,7 +223,7 @@ class MnistDPL(DeepProblogModel):
         Raises:
             err: NotImplementedError if the loss function is not available
         """
-        if args.dataset in ["addmnist", "shortmnist", "restrictedmnist", "halfmnist"]:
+        if args.dataset in ["addmnist", "shortmnist", "restrictedmnist", "halfmnist"]:            
             return ADDMNIST_DPL(ADDMNIST_Cumulative)
         else:
             return NotImplementedError("Wrong dataset choice")

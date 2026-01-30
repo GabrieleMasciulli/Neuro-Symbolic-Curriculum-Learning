@@ -217,6 +217,28 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         help="Number of curriculum phases (from easy to hard)."
     )
     
+    # parameters for contrastive learning framwork
+    parser.add_argument(
+        "--contrastive",
+        action="store_true",
+        default=False,
+        help="Whether to use contrastive learning framework.",
+    )
+    
+    parser.add_argument(
+        "--contrastive_temperature",
+        type=float,
+        default=0.5,
+        help="Temperature parameter for contrastive loss.",
+    )
+    
+    parser.add_argument(
+        "--w_contrastive",
+        type=float,
+        default=1.0,
+        help="Weight for contrastive loss component.",
+    )
+    
     # others
     parser.add_argument(
         "--to_add",

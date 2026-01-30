@@ -78,6 +78,14 @@ class nMNIST(Dataset):
                 # normalize
             ]
         )
+        
+        self.use_contrastive = args.contrastive
+        if self.use_contrastive:
+            self.contrastive_transform = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomAffine(degrees=25, translate=(0.3, 0.3), scale=(0.7, 1.3)),
+                transforms.ToTensor(),
+            ])
 
     def __len__(self):
         return self.data.shape[0]
@@ -88,9 +96,14 @@ class nMNIST(Dataset):
         concepts = self.concepts[idx]
 
         if self.transform is not None:
-            newimage = self.transform(image.astype("uint8"))
-
-        return newimage, label, concepts
+            view1 = self.transform(image.astype("uint8"))
+            
+        # generate positive pair if contrastive learning is enabled
+        if self.use_contrastive:
+            view2 = self.contrastive_transform(image.astype("uint8"))
+            return (view1, view2), label, concepts
+        
+        return view1, label, concepts
 
     def read_data(self, path, split):
         """
@@ -248,13 +261,18 @@ def generate_r_seq(size):
 
 
 def load_data(data_file, data_folder, c_sup=1, which_c=[-1], args=None):
-
     # Prepare data
     data_path = os.path.join(data_folder, data_file)
+    
     train_set = nMNIST("train", data_path=data_path, args=args)
-    val_set = nMNIST("val", data_path=data_path, args=args)
-    test_set = nMNIST("test", data_path=data_path, args=args)
-
+    
+    # temporarily modify a copy of args to avoid affecting the train set
+    # disable contrastive for val and test sets (no augmentations there)
+    eval_args = copy.copy(args)
+    eval_args.contrastive = False
+    
+    val_set = nMNIST("val", data_path=data_path, args=eval_args)
+    test_set = nMNIST("test", data_path=data_path, args=eval_args)
     # CWD-independent path (notebooks often run from rss/notebooks)
     rss_root = Path(__file__).resolve().parents[2]
     r_seq_path = rss_root / "data" / "rn.npy"
@@ -282,6 +300,6 @@ def load_data(data_file, data_folder, c_sup=1, which_c=[-1], args=None):
         else:
             numel += 1
 
-    # print("Giving supervision to:", numel)
+    print("Giving supervision to:", numel, "samples out of", len(train_set))
 
     return train_set, val_set, test_set

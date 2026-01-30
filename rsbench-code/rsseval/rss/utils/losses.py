@@ -2,7 +2,38 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
+import sys
 
+def InfoNCE_loss(emb1, emb2, temperature=1):
+    """Compute the InfoNCE loss between two sets of embeddings.
+
+    Args:
+        emb1: First set of embeddings (batch_size x embedding_dim).
+        emb2: Second set of embeddings (batch_size x embedding_dim).
+        temperature: Temperature parameter for scaling.
+
+    Returns:
+        loss: Computed InfoNCE loss.
+    """
+    batch_size = emb1.size(0)
+
+    # Normalize embeddings
+    emb1 = F.normalize(emb1, dim=1)
+    emb2 = F.normalize(emb2, dim=1)
+
+    # Compute similarity matrix (logits)
+    logits = torch.matmul(emb1, emb2.T) / temperature 
+
+    # Create labels
+    # diagonal elements are positive pairs, off-diagonal are negatives
+    labels = torch.arange(batch_size).to(emb1.device)
+
+    # Compute cross-entropy loss
+    loss = F.cross_entropy(logits, labels)
+    
+    losses = {"contrastive-loss": loss.item()}
+
+    return loss, losses
 
 def ADDMNIST_Classification(out_dict: dict, args):
     """Addmnist classification loss
@@ -70,7 +101,7 @@ def ADDMNIST_Concept_Match(out_dict: dict, args):
             )
     losses = {"c-loss": loss.item()}
 
-    print(loss.item() / len(objs))
+    # print(loss.item() / len(objs))
 
     return loss / len(objs), losses
 
@@ -212,13 +243,21 @@ def ADDMNIST_Cumulative(out_dict: dict, args):
         loss3, losses3 = ADDMNIST_Concept_Match(out_dict, args)
         mitigation += args.w_c * loss3
         losses.update(losses3)
+    if args.contrastive:
+        z = out_dict["CS"] # get concept embeddings, shape: (batch_size, 2, emb_dim)
+        z_flat = z.view(z.size(0), -1)  # flatten to (batch_size, 2 * emb_dim)
+        z1, z2 = z_flat.chunk(2, dim=0) # split back to two views
+        
+        # compute contrastive loss
+        contrastive_loss, losses_contrastive = InfoNCE_loss(z1, z2, temperature=args.contrastive_temperature)
+        mitigation += args.w_contrastive * contrastive_loss
+        losses.update(losses_contrastive)
+
     # if args.dataset in ['clipshortmnist']:
     #     loss4, losses4 = ADDMNIST_Concept_CLIP(out_dict, args)
     #     mitigation += loss4
     #     losses.update(losses4)
-
     return loss + args.gamma * mitigation, losses
-
 
 def KAND_Classification(out_dict: dict, args):
     """Kandinsky classification loss

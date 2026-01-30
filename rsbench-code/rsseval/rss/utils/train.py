@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 from warmup_scheduler import GradualWarmupScheduler
 from sklearn.metrics import multilabel_confusion_matrix, confusion_matrix
 import numpy as np
+from utils.losses import InfoNCE_loss
 
 
 def convert_to_categories(elements):
@@ -35,14 +36,6 @@ def convert_to_categories(elements):
         lambda x: "".join(map(str, x)), axis=1, arr=elements
     )
     return np.array([int(x, 2) for x in binary_rep])
-
-
-def entropy(p):
-    """Compute entropy given a probability distribution."""
-    p = np.clip(p, 1e-15, 1)
-
-    return -np.sum(p * np.log(p)) / np.log(len(p))
-
 
 def compute_coverage(confusion_matrix):
     """Compute the coverage of a confusion matrix.
@@ -57,7 +50,6 @@ def compute_coverage(confusion_matrix):
     coverage = np.sum(clipped_values) / len(clipped_values)
 
     return coverage
-
 
 def compute_coverage_hard(confusion_matrix):
         """Compute a stricter ("hard") coverage of a confusion matrix.
@@ -80,7 +72,6 @@ def compute_coverage_hard(confusion_matrix):
         # Non-empty and "pure" columns only.
         pure = (col_sums > 0) & np.isclose(max_values, col_sums)
         return float(np.mean(pure))
-
 
 def plot_confusion_matrix(
     y_true, y_pred, labels=None, title="Confusion Matrix", save_path=None
@@ -123,7 +114,6 @@ def plot_confusion_matrix(
     plt.close()
 
     return cm
-
 
 def plot_multilabel_confusion_matrix(
     y_true, y_pred, class_names, title, save_path=None
@@ -176,7 +166,6 @@ def plot_multilabel_confusion_matrix(
 
     return to_rtn_cm
 
-
 def plot_actions_confusion_matrix(c_true, c_pred, title, save_path=None):
 
     # Define scenarios and corresponding labels
@@ -227,7 +216,6 @@ def plot_actions_confusion_matrix(c_true, c_pred, title, save_path=None):
 
     return to_rtn
 
-
 def save_embeddings(dataset: BaseDataset, device, name):
     dataset.return_embeddings = True
     dataset.args.batch_size = 1  # 1 as batch size
@@ -268,7 +256,6 @@ def save_embeddings(dataset: BaseDataset, device, name):
                 f"embeddings_{name}/{subfolder_name}", f"{file_name}.pt"
             )
             torch.save(embeddings, save_path)
-
 
 def save_predictions_to_csv(model, test_set, csv_name, dataset):
     model.eval()
@@ -321,7 +308,6 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
         writer = csv.writer(file)
         writer.writerows(concatenated_tensor)
 
-
 def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     """TRAINING
 
@@ -353,6 +339,12 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         
     if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
         to_add += f"_w-rec{args.w_rec}"
+        
+    if args.entropy and args.w_h > 0: # entropy weight
+        to_add += f"_entropy{args.w_h}"
+        
+    if args.contrastive:
+        to_add += f"_contrastive{args.w_contrastive}"
 
     save_path = f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
 
@@ -448,8 +440,21 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
         for i, data in enumerate(train_loader):
             images, labels, concepts = data
-            images, labels, concepts = (
-                images.to(model.device),
+            
+            # check if we are receiving pairs (contrastive learning setup is on) or single images
+            if args.contrastive and isinstance(images, (list, tuple)):
+                view1, view2 = images
+                view1, view2 = view1.to(model.device), view2.to(model.device)
+                out_dict = model(torch.cat([view1, view2]))                
+                
+                # update out_dict with doubled targets
+                labels = torch.cat([labels, labels], dim=0)
+            else: # otherwise ordinary training
+                images = images.to(model.device)
+                out_dict = model(images)
+                
+            
+            labels, concepts = (
                 labels.to(model.device),
                 concepts.to(model.device),
             )
@@ -466,9 +471,8 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     shape = torch.nn.Softmax(dim=-1)(shape)
                     color = torch.nn.Softmax(dim=-1)(color)
                     conc_preds.append(torch.cat([shape, color], dim=-1))
-                conc_preds = torch.stack(conc_preds, dim=0)
-
-            out_dict = model(images)
+                conc_preds = torch.stack(conc_preds, dim=0)    
+            
             out_dict.update({"INPUTS": images, "LABELS": labels, "CONCEPTS": concepts})
 
             if conc_sup is not None:
