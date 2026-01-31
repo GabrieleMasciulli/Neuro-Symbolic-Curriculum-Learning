@@ -137,7 +137,13 @@ def BOIA_get_loader(dataset, batch_size, val_test):
         shuffle = True
 
     return DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True
     )
 
 

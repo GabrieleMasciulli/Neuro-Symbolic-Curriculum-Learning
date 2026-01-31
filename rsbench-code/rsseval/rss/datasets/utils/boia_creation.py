@@ -37,6 +37,17 @@ class BOIADataset(Dataset):
         self.is_train = "train" in pkl_file_path
         if not self.is_train:
             assert ("test" in pkl_file_path) or ("val" in pkl_file_path)
+        
+        import os
+        if not os.path.exists(pkl_file_path):
+            raise FileNotFoundError(
+                f"BOIA dataset file not found: {pkl_file_path}\n"
+                f"Please ensure the BOIA/BDD-OIA dataset is downloaded and placed in the 'data/bdd2048/' directory.\n"
+                f"Expected files:\n"
+                f"  data/bdd2048/train_BDD_OIA.pkl\n"
+                f"  data/bdd2048/val_BDD_OIA.pkl\n"
+                f"  data/bdd2048/test_BDD_OIA.pkl"
+            )
         self.data.extend(pickle.load(open(pkl_file_path, "rb")))
         self.transform = transform
         self.use_attr = use_attr

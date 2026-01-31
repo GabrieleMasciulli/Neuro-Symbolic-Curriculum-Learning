@@ -52,10 +52,35 @@ class SDDOIADataset(torch.utils.data.Dataset):
         self.base_path = base_path
         self.split = split
 
+        # Check if data directory exists
+        data_dir = os.path.join(self.base_path, self.split)
+        scenes_dir = os.path.join(self.base_path, "scenes")
+        if not os.path.exists(data_dir):
+            raise FileNotFoundError(
+                f"Data directory not found: {data_dir}\n"
+                f"Please ensure the SDDOIA dataset is downloaded/generated at '{self.base_path}'.\n"
+                f"Expected structure:\n"
+                f"  {self.base_path}/\n"
+                f"    train/\n"
+                f"    val/\n"
+                f"    test/\n"
+                f"    scenes/"
+            )
+        if not os.path.exists(scenes_dir):
+            raise FileNotFoundError(
+                f"Scenes directory not found: {scenes_dir}\n"
+                f"Please ensure the SDDOIA scenes are available at '{scenes_dir}'."
+            )
+
         # collecting images
         self.list_images = glob.glob(os.path.join(self.base_path, self.split, "*"))
         # sort the images
         self.list_images = sorted(self.list_images, key=self._extract_number)
+        
+        if len(self.list_images) == 0:
+            raise FileNotFoundError(
+                f"No images found in {data_dir}. Please check that the dataset is properly set up."
+            )
 
 
         # ok transform

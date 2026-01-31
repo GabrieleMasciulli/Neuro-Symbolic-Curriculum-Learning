@@ -75,7 +75,6 @@ class SDDOIADPL(DeepProblogModel):
 
         # Worlds-queries matrix
         if self.args.task == "boia":
-
             if args.boia_ood_knowledge:
                 # build the world query matrices for mini boia
                 self.FS_w_q = build_world_queries_matrix_FS_ambulance().to(self.device)

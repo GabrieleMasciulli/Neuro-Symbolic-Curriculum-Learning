@@ -353,7 +353,7 @@ def ADDMNIST_eval_tloss_cacc_acc(out_dict, concepts, args):
     )
     g_objs = torch.split(concepts, 1, dim=1)
 
-    if args.dataset != "clipshortmnist" and args.dataset != "shortmnist":
+    if args.dataset != "clipshortmnist": #and args.dataset != "shortmnist":
 
         assert len(objs) == len(g_objs), f"{len(objs)}-{len(g_objs)}"
 
