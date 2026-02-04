@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 import pickle
 from datasets.utils.mnist_creation import generate_r_seq
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
+from torchvision import transforms
 
 
 class BOIADataset(Dataset):
@@ -22,6 +23,7 @@ class BOIADataset(Dataset):
         transform=None,
         c_sup=1,
         which_c=[-1],
+        args=None,
     ):
         """
         Arguments:
@@ -37,8 +39,9 @@ class BOIADataset(Dataset):
         self.is_train = "train" in pkl_file_path
         if not self.is_train:
             assert ("test" in pkl_file_path) or ("val" in pkl_file_path)
-        
+
         import os
+
         if not os.path.exists(pkl_file_path):
             raise FileNotFoundError(
                 f"BOIA dataset file not found: {pkl_file_path}\n"
@@ -59,12 +62,24 @@ class BOIADataset(Dataset):
         self.r_seq = generate_r_seq(len(self.data))
         self.c_sup = c_sup
         self.which_c = which_c
-        # self.numel = 0
+        self.numel = 0
+        self.use_contrastive = args.contrastive
 
-        # for i in range(self.__len__()):
-        #     self.__getitem__(i)
+        if self.use_contrastive:
+            self.contrastive_transform = transforms.Compose(
+                [
+                    transforms.ToPILImage(),
+                    transforms.RandomAffine(
+                        degrees=25, translate=(0.3, 0.3), scale=(0.7, 1.3)
+                    ),
+                    transforms.ToTensor(),
+                ]
+            )
 
-        # print("Given supervision to", self.numel)
+        for i in range(self.__len__()):
+            self.__getitem__(i)
+
+        print("Given supervision to", self.numel)
         # quit()
 
     def __len__(self):
@@ -79,7 +94,7 @@ class BOIADataset(Dataset):
         lab_path = self.image_dir + "/labels/" + t_path
         con_path = self.image_dir + "/concepts/" + t_path
 
-        img = torch.load(img_path).squeeze(0)
+        view1 = torch.load(img_path).squeeze(0)
         class_label = torch.load(lab_path).squeeze(0)
         attr_label = torch.load(con_path).squeeze(0)
 
@@ -108,7 +123,7 @@ class BOIADataset(Dataset):
                     if c not in self.which_c:
                         attr_label[c] = -1
             else:
-                # self.numel += 1
+                self.numel += 1
                 for k, order in CONCEPTS_ORDER.items():
                     if k not in [
                         "red_light",
@@ -125,7 +140,11 @@ class BOIADataset(Dataset):
 
         class_label = class_label[:4]
 
-        return img, class_label, attr_label
+        if self.use_contrastive:
+            view2 = self.contrastive_transform(view1)
+            return (view1, view2), class_label, attr_label
+
+        return view1, class_label, attr_label
 
 
 ## --------------------------------------------------------------------------------------------------------
@@ -195,7 +214,6 @@ class CLIPBOIADataset(Dataset):
 
         # assert class_label[4] == 0, class_label
         # NOTE: we are not interested in the last action
-
         # filter for the concept supervision given
         if self.r_seq[idx] > self.c_sup:
             attr_label[:] = -1

@@ -26,7 +26,6 @@ import matplotlib.pyplot as plt
 
 from warmup_scheduler import GradualWarmupScheduler
 from sklearn.metrics import multilabel_confusion_matrix, confusion_matrix
-import numpy as np
 from utils.losses import InfoNCE_loss
 
 
@@ -36,6 +35,7 @@ def convert_to_categories(elements):
         lambda x: "".join(map(str, x)), axis=1, arr=elements
     )
     return np.array([int(x, 2) for x in binary_rep])
+
 
 def compute_coverage(confusion_matrix):
     """Compute the coverage of a confusion matrix.
@@ -51,27 +51,29 @@ def compute_coverage(confusion_matrix):
 
     return coverage
 
+
 def compute_coverage_hard(confusion_matrix):
-        """Compute a stricter ("hard") coverage of a confusion matrix.
+    """Compute a stricter ("hard") coverage of a confusion matrix.
 
-        A predicted class (column) counts as "covered" only if:
-        - it is non-empty, and
-        - all samples assigned to that predicted class come from a single true class
-            (i.e., the column mass is concentrated in exactly one row).
+    A predicted class (column) counts as "covered" only if:
+    - it is non-empty, and
+    - all samples assigned to that predicted class come from a single true class
+        (i.e., the column mass is concentrated in exactly one row).
 
-        This is useful for a harder concept-collapse estimate.
-        """
+    This is useful for a harder concept-collapse estimate.
+    """
 
-        cm = np.asarray(confusion_matrix)
-        if cm.size == 0:
-                return 0.0
+    cm = np.asarray(confusion_matrix)
+    if cm.size == 0:
+        return 0.0
 
-        col_sums = cm.sum(axis=0)
-        max_values = cm.max(axis=0)
+    col_sums = cm.sum(axis=0)
+    max_values = cm.max(axis=0)
 
-        # Non-empty and "pure" columns only.
-        pure = (col_sums > 0) & np.isclose(max_values, col_sums)
-        return float(np.mean(pure))
+    # Non-empty and "pure" columns only.
+    pure = (col_sums > 0) & np.isclose(max_values, col_sums)
+    return float(np.mean(pure))
+
 
 def plot_confusion_matrix(
     y_true, y_pred, labels=None, title="Confusion Matrix", save_path=None
@@ -114,6 +116,7 @@ def plot_confusion_matrix(
     plt.close()
 
     return cm
+
 
 def plot_multilabel_confusion_matrix(
     y_true, y_pred, class_names, title, save_path=None
@@ -166,6 +169,7 @@ def plot_multilabel_confusion_matrix(
 
     return to_rtn_cm
 
+
 def plot_actions_confusion_matrix(c_true, c_pred, title, save_path=None):
 
     # Define scenarios and corresponding labels
@@ -216,6 +220,7 @@ def plot_actions_confusion_matrix(c_true, c_pred, title, save_path=None):
 
     return to_rtn
 
+
 def save_embeddings(dataset: BaseDataset, device, name):
     dataset.return_embeddings = True
     dataset.args.batch_size = 1  # 1 as batch size
@@ -256,6 +261,7 @@ def save_embeddings(dataset: BaseDataset, device, name):
                 f"embeddings_{name}/{subfolder_name}", f"{file_name}.pt"
             )
             torch.save(embeddings, save_path)
+
 
 def save_predictions_to_csv(model, test_set, csv_name, dataset):
     model.eval()
@@ -308,6 +314,72 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
         writer = csv.writer(file)
         writer.writerows(concatenated_tensor)
 
+
+def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
+    """TRAINING WITH ACTIVE LEARNING FRAMEWORK
+
+    Args:
+        model (MnistDPL): network
+        dataset (BaseDataset): dataset Kandinksy
+        _loss (ADDMNIST_DPL): loss function
+        args: parsed args
+
+    Returns:
+        None: This function does not return a value.
+    """
+    if args.dataset in ["shortmnist"] and args.joint:
+        to_add += "_joint"
+
+    if args.curriculum:
+        to_add += f"_curriculum_{args.risk_type}"
+
+    if (
+        "rec" in args.model
+    ):  # models with reconstruction term i.e. decoder in the architecture
+        to_add += f"_w-rec{args.w_rec}"
+
+    if args.entropy and args.w_h > 0:  # entropy weight
+        to_add += f"_entropy{args.w_h}"
+
+    if args.contrastive:
+        to_add += f"_contrastive{args.w_contrastive}"
+
+    save_path = (
+        f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
+    )
+
+    # Default Setting for Training
+    model.to(model.device)
+
+    if args.dataset == "shortmnist":
+        model = model.float()
+
+    train_loader, val_loader, test_loader = dataset.get_data_loaders()
+    dataset.print_stats()
+
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(model.opt, args.exp_decay)
+    w_scheduler = None
+    if args.warmup_steps > 0:
+        w_scheduler = GradualWarmupScheduler(model.opt, 1.0, args.warmup_steps)
+
+    if not args.tuning and args.wandb is not None:
+        run_name = f"{args.dataset}-{args.model}-seed{args.seed}"
+
+        fprint("\n---wandb on\n")
+        wandb.init(
+            project=args.project,
+            group=args.group_name,
+            name=run_name,
+            config=args,
+        )
+
+    fprint("\n--- Start of Training ---\n")
+
+    # default for warm-up
+    model.opt.zero_grad()
+    model.opt.step()
+
+
 def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     """TRAINING
 
@@ -333,20 +405,30 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     if args.dataset in ["shortmnist"] and args.joint:
         to_add += "_joint"
-        
+
     if args.curriculum:
         to_add += f"_curriculum_{args.risk_type}"
-        
-    if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
+
+    if (
+        "rec" in args.model
+    ):  # models with reconstruction term i.e. decoder in the architecture
         to_add += f"_w-rec{args.w_rec}"
-        
-    if args.entropy and args.w_h > 0: # entropy weight
+
+    if args.entropy and args.w_h > 0:  # entropy weight
         to_add += f"_entropy{args.w_h}"
-        
+
     if args.contrastive:
         to_add += f"_contrastive{args.w_contrastive}"
 
-    save_path = f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
+    if args.c_sup > 0:
+        to_add += f"_c-sup{args.c_sup}"
+
+    if args.active_learning:
+        to_add += f"_active-{args.active_type}"
+
+    save_path = (
+        f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
+    )
 
     # save embeddings variable
     save_embeddings_flag = False
@@ -364,12 +446,14 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     train_loader, val_loader, test_loader = dataset.get_data_loaders()
     dataset.print_stats()
-    
+
     if args.curriculum and args.curriculum_steps is not None:
         # Curriculum learning setup - use sampler from dataset if available
-        curriculum_schedule = np.linspace(1.0 / args.curriculum_steps, 1.0, num=args.curriculum_steps)
-        curriculum_sampler = getattr(dataset, 'curriculum_sampler', None)
-    
+        curriculum_schedule = np.linspace(
+            1.0 / args.curriculum_steps, 1.0, num=args.curriculum_steps
+        )
+        curriculum_sampler = getattr(dataset, "curriculum_sampler", None)
+
     scheduler = torch.optim.lr_scheduler.ExponentialLR(model.opt, args.exp_decay)
     w_scheduler = None
     if args.warmup_steps > 0:
@@ -377,15 +461,26 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     if not args.tuning and args.wandb is not None:
         to_add = ""
-        
+
         if args.curriculum:
             to_add += "-curriculum"
-            
-        if "rec" in args.model: # models with reconstruction term i.e. decoder in the architecture
+
+        if (
+            "rec" in args.model
+        ):  # models with reconstruction term i.e. decoder in the architecture
             to_add += f"-w_rec{args.w_rec}"
-        
+
+        if args.c_sup > 0:
+            to_add += f"-c_sup{args.c_sup}"
+
+        if args.entropy and args.w_h > 0:  # entropy weight
+            to_add += f"-w_h{args.w_h}"
+
+        if args.contrastive:
+            to_add += f"-w_contrastive{args.w_contrastive}"
+
         run_name = f"{args.dataset}-{args.model}-seed{args.seed}{to_add}"
-        
+
         fprint("\n---wandb on\n")
         wandb.init(
             project=args.project,
@@ -407,20 +502,25 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     for epoch in range(args.n_epochs):
         model.train()
-        
+
         # Curriculum learning: update sampler phase based on epoch
         if args.curriculum and curriculum_sampler is not None:
             # Determine curriculum phase based on epoch
             phase_epochs = args.n_epochs // len(curriculum_schedule)
             phase_index = min(epoch // phase_epochs, len(curriculum_schedule) - 1)
-            phase = curriculum_schedule[phase_index]  # Select phase based on current epoch
-            
+            phase = curriculum_schedule[
+                phase_index
+            ]  # Select phase based on current epoch
+
             fprint(f"\nEpoch {epoch}: Training on easiest {int(phase*100)}% of data.")
-            
+
             # Update the curriculum sampler's phase and recreate the loader
             curriculum_sampler.current_phase = phase
             train_loader = get_loader(
-                dataset.dataset_train, args.batch_size, val_test=False, sampler=curriculum_sampler
+                dataset.dataset_train,
+                args.batch_size,
+                val_test=False,
+                sampler=curriculum_sampler,
             )
 
         ys, y_true, cs, cs_true = None, None, None, None
@@ -433,27 +533,32 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             if curriculum_sampler is not None:
                 sampled_indices = list(train_loader.sampler)
                 # Collect all concepts from sampled data
-                all_epoch_real_concepts = dataset.dataset_train.real_concepts[sampled_indices]
+                all_epoch_real_concepts = dataset.dataset_train.real_concepts[
+                    sampled_indices
+                ]
                 for concept_pair in all_epoch_real_concepts:
-                    epoch_concepts[int(concept_pair[0])] = epoch_concepts.get(int(concept_pair[0]), 0) + 1
-                    epoch_concepts[int(concept_pair[1])] = epoch_concepts.get(int(concept_pair[1]), 0) + 1
+                    epoch_concepts[int(concept_pair[0])] = (
+                        epoch_concepts.get(int(concept_pair[0]), 0) + 1
+                    )
+                    epoch_concepts[int(concept_pair[1])] = (
+                        epoch_concepts.get(int(concept_pair[1]), 0) + 1
+                    )
 
         for i, data in enumerate(train_loader):
             images, labels, concepts = data
-            
+
             # check if we are receiving pairs (contrastive learning setup is on) or single images
             if args.contrastive and isinstance(images, (list, tuple)):
                 view1, view2 = images
                 view1, view2 = view1.to(model.device), view2.to(model.device)
-                out_dict = model(torch.cat([view1, view2]))                
-                
+                out_dict = model(torch.cat([view1, view2]))
+
                 # update out_dict with doubled targets
                 labels = torch.cat([labels, labels], dim=0)
-            else: # otherwise ordinary training
+            else:  # otherwise ordinary training
                 images = images.to(model.device)
                 out_dict = model(images)
-                
-            
+
             labels, concepts = (
                 labels.to(model.device),
                 concepts.to(model.device),
@@ -471,8 +576,8 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                     shape = torch.nn.Softmax(dim=-1)(shape)
                     color = torch.nn.Softmax(dim=-1)(color)
                     conc_preds.append(torch.cat([shape, color], dim=-1))
-                conc_preds = torch.stack(conc_preds, dim=0)    
-            
+                conc_preds = torch.stack(conc_preds, dim=0)
+
             out_dict.update({"INPUTS": images, "LABELS": labels, "CONCEPTS": concepts})
 
             if conc_sup is not None:
@@ -502,7 +607,11 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 progress_bar(i, len(train_loader) - 9, epoch, loss.item())
 
         # Print summary of unique concepts shown in this epoch
-        if args.curriculum and curriculum_sampler is not None and len(epoch_concepts) > 0:
+        if (
+            args.curriculum
+            and curriculum_sampler is not None
+            and len(epoch_concepts) > 0
+        ):
             print(f"\n=== Epoch {epoch} Concept Summary ===")
             for concept_id, count in sorted(epoch_concepts.items()):
                 print(f"  Concept {concept_id}: {count} samples")
@@ -529,11 +638,13 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             if args.task == "mnmath":
                 acc = (
-                    (y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu()).sum().item()
+                    (y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu())
+                    .sum()
+                    .item()
                     / len(y_pred.flatten())
                     * 100
                 )
-            else: 
+            else:
                 acc = (
                     (y_pred.detach().cpu() == y_true.detach().cpu()).sum().item()
                     / len(y_true)
@@ -565,27 +676,42 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
         ### LOGGING ###
         fprint("  ACC C", cacc, "  ACC Y", yacc, "F1 Y", f1)
-        
+
         # Recompute class-specific risks periodically for curriculum learning
-        if args.curriculum and args.risk_type == "class" and curriculum_sampler is not None and hasattr(args, 'risk_update_freq'):
+        if (
+            args.curriculum
+            and args.risk_type == "class"
+            and curriculum_sampler is not None
+            and hasattr(args, "risk_update_freq")
+        ):
             risk_update_freq = args.risk_update_freq
             if (epoch + 1) % risk_update_freq == 0 and epoch > 15:
-                fprint(f"\n--- Recomputing class-specific risks at epoch {epoch + 1} ---")
+                fprint(
+                    f"\n--- Recomputing class-specific risks at epoch {epoch + 1} ---"
+                )
                 num_classes = 10 if args.dataset != "halfmnist" else 5
-                
+
                 # Recompute risks on validation set
                 new_risks, partial_risk = compute_class_specific_risks_from_model(
-                    model, val_loader, args.dataset, num_classes=num_classes, verbose=True
+                    model,
+                    val_loader,
+                    args.dataset,
+                    num_classes=num_classes,
+                    verbose=True,
                 )
-                
+
                 # Update the curriculum sampler with new risks
                 dataset.concept_risks = new_risks
                 curriculum_sampler.risk_scores = new_risks
-                curriculum_sampler.sample_difficulties = curriculum_sampler._score_samples(
-                    dataset.dataset_train.real_concepts
+                curriculum_sampler.sample_difficulties = (
+                    curriculum_sampler._score_samples(
+                        dataset.dataset_train.real_concepts
+                    )
                 )
-                curriculum_sampler.sorted_indices = np.argsort(curriculum_sampler.sample_difficulties)
-                
+                curriculum_sampler.sorted_indices = np.argsort(
+                    curriculum_sampler.sample_difficulties
+                )
+
                 fprint(f"New risks: {new_risks}")
 
         if not args.tuning and f1 > best_f1:
@@ -669,12 +795,10 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             for key, value in cfs.items():
                 print("Concept collapse", key, 1 - compute_coverage(value))
-        
+
         elif args.task == "mnmath":
             y_labels = ["first", "second"]
-            concept_labels = [
-                ["{i}" for i in range(10) for _ in range(4)] 
-            ]
+            concept_labels = [["{i}" for i in range(10) for _ in range(4)]]
             plot_multilabel_confusion_matrix(
                 y_true, y_pred, y_labels, "Labels", save_path="labels.png"
             )

@@ -31,6 +31,7 @@ class BOIA(BaseDataset):
             transform=None,
             c_sup=self.args.c_sup,
             which_c=self.args.which_c,
+            args=self.args,
         )
         self.dataset_val = BOIADataset(
             pkl_file_path=val_data_path,
@@ -40,6 +41,7 @@ class BOIA(BaseDataset):
             image_dir=image_dir + "val",
             n_class_attr=2,
             transform=None,
+            args=self.args,
         )
         self.dataset_test = BOIADataset(
             pkl_file_path=test_data_path,
@@ -49,6 +51,7 @@ class BOIA(BaseDataset):
             image_dir=image_dir + "test",
             n_class_attr=2,
             transform=None,
+            args=self.args,
         )
 
         print(f"Loaded datasets in {time.time()-start} s.")

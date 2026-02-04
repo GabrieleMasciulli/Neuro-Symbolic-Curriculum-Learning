@@ -184,6 +184,7 @@ def evaluate_metrics(
             "clipboia",
             "clipsddoia",
         ]:
+            
             loss, ac, acc, f1 = SDDOIA_eval_tloss_cacc_acc(out_dict)
         elif args.dataset in [
             "xor",
@@ -206,7 +207,6 @@ def evaluate_metrics(
         y_pred = softmax(y_pred, axis=1)
 
     if last:
-
         if args.dataset in [
             "sddoia",
             "boia",
@@ -223,7 +223,9 @@ def evaluate_metrics(
             p_cs = pc_pred
         elif args.dataset in ["mnmath"]:
             ys = (y_pred > 0.5).astype(np.float)
-            c_true = c_true.reshape(c_true.shape[0], c_true.shape[1] * c_true.shape[2], 1)
+            c_true = c_true.reshape(
+                c_true.shape[0], c_true.shape[1] * c_true.shape[2], 1
+            )
             gs = np.split(c_true, c_true.shape[1], axis=1)
             cs = np.split(c_pred, c_pred.shape[1], axis=1)
             p_cs = np.split(pc_pred, pc_pred.shape[1], axis=1)
@@ -293,7 +295,7 @@ def evaluate_metrics(
                 1
             )  # all the items of probabilities are considered
             p_ys = p_ys.max(axis=1)
-        
+
         if args.dataset == "mnmath":
             cs = np.expand_dims(cs, axis=1)
 
@@ -353,7 +355,7 @@ def ADDMNIST_eval_tloss_cacc_acc(out_dict, concepts, args):
     )
     g_objs = torch.split(concepts, 1, dim=1)
 
-    if args.dataset != "clipshortmnist": #and args.dataset != "shortmnist":
+    if args.dataset != "clipshortmnist":  # and args.dataset != "shortmnist":
 
         assert len(objs) == len(g_objs), f"{len(objs)}-{len(g_objs)}"
 
@@ -493,7 +495,8 @@ def SDDOIA_eval_tloss_cacc_acc(out_dict):
     else:
         loss = F.binary_cross_entropy(cs, c_true.float())
 
-    cacc = (c_true == c_pred).all(dim=1).float().mean().item()
+    # Compute mean per-concept accuracy (not all-or-nothing)
+    cacc = (c_true == c_pred).float().mean().item()
 
     # Split predictions into separate tensors for each label
     y_pred_split = torch.split(y_pred, 2, dim=1)
@@ -563,6 +566,7 @@ def XOR_eval_tloss_cacc_acc(out_dict, concepts):
 
     return loss / len(objs), cacc / len(objs) * 100, acc * 100, f1 * 100
 
+
 def MNMATH_eval_tloss_cacc_acc(out_dict, concepts):
     """XOR evaluation
 
@@ -576,8 +580,10 @@ def MNMATH_eval_tloss_cacc_acc(out_dict, concepts):
         f1: f1 accuracy
     """
     reprs = out_dict["CS"]
-    concepts_flat = concepts.view(concepts.size(0), concepts.size(1) * concepts.size(2), 1)
-    
+    concepts_flat = concepts.view(
+        concepts.size(0), concepts.size(1) * concepts.size(2), 1
+    )
+
     L = len(reprs)
 
     objs = torch.split(
@@ -618,12 +624,15 @@ def MNMATH_eval_tloss_cacc_acc(out_dict, concepts):
         y_pred.flatten().size() == y_true.flatten().size()
     ), f"size c_pred: {c_pred.flatten().size()}, size g_objs: {g_obj.size()}"
 
-    acc = (y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu()).sum().item() / len(y_true.flatten())
+    acc = (
+        y_pred.flatten().detach().cpu() == y_true.flatten().detach().cpu()
+    ).sum().item() / len(y_true.flatten())
 
-    f1 = f1_score(y_true.flatten().cpu().numpy(), y_pred.flatten().cpu().numpy(), average="macro")
+    f1 = f1_score(
+        y_true.flatten().cpu().numpy(), y_pred.flatten().cpu().numpy(), average="macro"
+    )
 
     return loss / len(objs), cacc / len(objs) * 100, acc * 100, f1 * 100
-
 
 
 def compute_clevr_predictions(logits):
