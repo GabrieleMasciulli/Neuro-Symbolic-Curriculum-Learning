@@ -78,8 +78,10 @@ class BOIADataset(Dataset):
 
         for i in range(self.__len__()):
             self.__getitem__(i)
-
-        print("Given supervision to", self.numel)
+            
+        
+        if self.c_sup > 0:
+            print("Given supervision to", len(self.data) if self.c_sup == 1 else self.numel)
         # quit()
 
     def __len__(self):

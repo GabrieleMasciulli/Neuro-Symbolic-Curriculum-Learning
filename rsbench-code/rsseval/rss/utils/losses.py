@@ -522,7 +522,7 @@ def SDDOIA_Concept_Match(out_dict: dict, args):
             filtered_concepts = concepts[mask, i]
             loss += torch.nn.NLLLoss()(filtered_rep.log(), filtered_concepts)
 
-    print("Concept supervision loss", loss.item())
+    # print("Concept supervision loss", loss.item())
 
     losses = {"c-loss": loss.item()}
 

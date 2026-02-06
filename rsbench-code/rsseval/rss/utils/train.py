@@ -872,7 +872,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         save_predictions_to_csv(model, test_loader, csv_name, args.dataset)
 
         if not args.tuning and args.wandb is not None:
-            K = max(max(y_pred), max(y_true))
+            K = max(np.max(y_pred), np.max(y_true))
 
             wandb.log({"test-y-acc": yac * 100, "test-y-f1": yf1 * 100})
             wandb.log({"test-c-acc": cac * 100, "test-c-f1": cf1 * 100})
@@ -880,7 +880,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             wandb.log(
                 {
                     "cf-labels": wandb.plot.confusion_matrix(
-                        None, y_true, y_pred, class_names=[str(i) for i in range(K + 1)]
+                        None, y_true.flatten().tolist(), y_pred.flatten().tolist(), class_names=[str(i) for i in range(K + 1)]
                     ),
                 }
             )
@@ -888,7 +888,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             wandb.log(
                 {
                     "cf-concepts": wandb.plot.confusion_matrix(
-                        None, c_true, c_pred, class_names=[str(i) for i in range(K + 1)]
+                        None, c_true.flatten().tolist(), c_pred.flatten().tolist(), class_names=[str(i) for i in range(K + 1)]
                     ),
                 }
             )
