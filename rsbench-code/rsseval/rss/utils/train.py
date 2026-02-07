@@ -270,6 +270,12 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
 
     for data in tqdm(test_set, desc="Saving predictions to CSV..."):
         images, labels, concepts = data
+
+        # Handle contrastive learning case: images may be a tuple/list of (view1, view2)
+        # For evaluation, we only need the first view
+        if isinstance(images, (list, tuple)):
+            images = images[0]
+
         images, labels, concepts = (
             images.to(model.device),
             labels.to(model.device),
@@ -313,7 +319,6 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
     with open(csv_path, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerows(concatenated_tensor)
-
 
 def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     """TRAINING WITH ACTIVE LEARNING FRAMEWORK
@@ -548,6 +553,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             images, labels, concepts = data
 
             # check if we are receiving pairs (contrastive learning setup is on) or single images
+
             if args.contrastive and isinstance(images, (list, tuple)):
                 view1, view2 = images
                 view1, view2 = view1.to(model.device), view2.to(model.device)
@@ -880,7 +886,10 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             wandb.log(
                 {
                     "cf-labels": wandb.plot.confusion_matrix(
-                        None, y_true.flatten().tolist(), y_pred.flatten().tolist(), class_names=[str(i) for i in range(K + 1)]
+                        None,
+                        y_true.flatten().tolist(),
+                        y_pred.flatten().tolist(),
+                        class_names=[str(i) for i in range(K + 1)],
                     ),
                 }
             )
@@ -888,7 +897,10 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             wandb.log(
                 {
                     "cf-concepts": wandb.plot.confusion_matrix(
-                        None, c_true.flatten().tolist(), c_pred.flatten().tolist(), class_names=[str(i) for i in range(K + 1)]
+                        None,
+                        c_true.flatten().tolist(),
+                        c_pred.flatten().tolist(),
+                        class_names=[str(i) for i in range(K + 1)],
                     ),
                 }
             )

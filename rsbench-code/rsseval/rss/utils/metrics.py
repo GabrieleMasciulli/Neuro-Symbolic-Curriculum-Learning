@@ -124,6 +124,12 @@ def evaluate_metrics(
     fcf1 = 0
     for i, data in enumerate(loader):
         images, labels, concepts = data
+        
+        # Handle contrastive learning case: images may be a tuple/list of (view1, view2)
+        # For evaluation, we only need the first view
+        if isinstance(images, (list, tuple)):
+            images = images[0]
+        
         images, labels, concepts = (
             images.to(model.device),
             labels.to(model.device),

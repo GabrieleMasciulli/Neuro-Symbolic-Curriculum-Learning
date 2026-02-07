@@ -23,11 +23,11 @@ def test(model: MnistDPL, dataset: BaseDataset, args):
     """
 
     # best f1
-    seeds = [123, 456, 789, 1011, 1213]
+    seeds = [0]
     caccs, yaccs, f1s, cf1s = [], [], [], []
 
     for seed in seeds:
-        current_model_path = f"best_model_{args.dataset}_{args.model}_{seed}.pth"
+        current_model_path = f"./checkpoints/best_model_{args.dataset}_{args.model}_{seed}{args.to_add}.pth"
 
         # Default Setting for Training
         model.to(model.device)
