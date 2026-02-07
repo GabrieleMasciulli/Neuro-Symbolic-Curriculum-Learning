@@ -4,7 +4,6 @@ from torch.utils.data import Dataset
 import pickle
 from datasets.utils.mnist_creation import generate_r_seq
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
-from torchvision import transforms
 
 
 class BOIADataset(Dataset):
@@ -65,23 +64,19 @@ class BOIADataset(Dataset):
         self.numel = 0
         self.use_contrastive = args.contrastive
 
+        # Note: BOIA uses 2048-dim feature vectors (not images), so we use
+        # noise-based augmentation instead of image transforms for contrastive learning
         if self.use_contrastive:
-            self.contrastive_transform = transforms.Compose(
-                [
-                    transforms.ToPILImage(),
-                    transforms.RandomAffine(
-                        degrees=25, translate=(0.3, 0.3), scale=(0.7, 1.3)
-                    ),
-                    transforms.ToTensor(),
-                ]
-            )
+            self.contrastive_noise_std = 0.1  # Standard deviation for Gaussian noise
 
         for i in range(self.__len__()):
             self.__getitem__(i)
-            
-        
+
         if self.c_sup > 0:
-            print("Given supervision to", len(self.data) if self.c_sup == 1 else self.numel)
+            print(
+                "Given supervision to",
+                len(self.data) if self.c_sup == 1 else self.numel,
+            )
         # quit()
 
     def __len__(self):
@@ -143,7 +138,9 @@ class BOIADataset(Dataset):
         class_label = class_label[:4]
 
         if self.use_contrastive:
-            view2 = self.contrastive_transform(view1)
+            # Apply Gaussian noise augmentation for contrastive learning on feature vectors
+            noise = torch.randn_like(view1) * self.contrastive_noise_std
+            view2 = view1 + noise
             return (view1, view2), class_label, attr_label
 
         return view1, class_label, attr_label
