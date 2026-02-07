@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
-import sys
+
 
 def InfoNCE_loss(emb1, emb2, temperature=1):
     """Compute the InfoNCE loss between two sets of embeddings.
@@ -22,7 +22,7 @@ def InfoNCE_loss(emb1, emb2, temperature=1):
     emb2 = F.normalize(emb2, dim=1)
 
     # Compute similarity matrix (logits)
-    logits = torch.matmul(emb1, emb2.T) / temperature 
+    logits = torch.matmul(emb1, emb2.T) / temperature
 
     # Create labels
     # diagonal elements are positive pairs, off-diagonal are negatives
@@ -30,10 +30,11 @@ def InfoNCE_loss(emb1, emb2, temperature=1):
 
     # Compute cross-entropy loss
     loss = F.cross_entropy(logits, labels)
-    
+
     losses = {"contrastive-loss": loss.item()}
 
     return loss, losses
+
 
 def ADDMNIST_Classification(out_dict: dict, args):
     """Addmnist classification loss
@@ -244,12 +245,14 @@ def ADDMNIST_Cumulative(out_dict: dict, args):
         mitigation += args.w_c * loss3
         losses.update(losses3)
     if args.contrastive:
-        z = out_dict["CS"] # get concept embeddings, shape: (batch_size, 2, emb_dim)
+        z = out_dict["CS"]  # get concept embeddings, shape: (batch_size, 2, emb_dim)
         z_flat = z.view(z.size(0), -1)  # flatten to (batch_size, 2 * emb_dim)
-        z1, z2 = z_flat.chunk(2, dim=0) # split back to two views
-        
+        z1, z2 = z_flat.chunk(2, dim=0)  # split back to two views
+
         # compute contrastive loss
-        contrastive_loss, losses_contrastive = InfoNCE_loss(z1, z2, temperature=args.contrastive_temperature)
+        contrastive_loss, losses_contrastive = InfoNCE_loss(
+            z1, z2, temperature=args.contrastive_temperature
+        )
         mitigation += args.w_contrastive * contrastive_loss
         losses.update(losses_contrastive)
 
@@ -258,6 +261,7 @@ def ADDMNIST_Cumulative(out_dict: dict, args):
     #     mitigation += loss4
     #     losses.update(losses4)
     return loss + args.gamma * mitigation, losses
+
 
 def KAND_Classification(out_dict: dict, args):
     """Kandinsky classification loss
@@ -551,6 +555,17 @@ def SDDOIA_Cumulative(out_dict: dict, args):
         loss3, losses3 = SDDOIA_Concept_Match(out_dict, args)
         mitigation += args.w_c * loss3
         losses.update(losses3)
+    if args.contrastive:
+        z = out_dict["CS"]  # get concept embeddings, shape: (batch_size, 2, emb_dim)
+        z_flat = z.view(z.size(0), -1)  # flatten to (batch_size, 2 * emb_dim)
+        z1, z2 = z_flat.chunk(2, dim=0)  # split back to two views
+
+        # compute contrastive loss
+        contrastive_loss, losses_contrastive = InfoNCE_loss(
+            z1, z2, temperature=args.contrastive_temperature
+        )
+        mitigation += args.w_contrastive * contrastive_loss
+        losses.update(losses_contrastive)
 
     return loss + args.gamma * mitigation, losses
 
@@ -636,6 +651,7 @@ def SDDOIA_CE(out_dict: dict, args):
 
     return loss, losses
 
+
 def XOR_Classification(out_dict: dict, args):
     """XOR classification loss
 
@@ -651,7 +667,7 @@ def XOR_Classification(out_dict: dict, args):
 
     out = out_dict["YS"]
     labels = out_dict["LABELS"].to(torch.long)
-    
+
     if args.model in [
         "xorsl",
         "xorcbm",
@@ -727,6 +743,7 @@ def XOR_Concept_Match(out_dict: dict, args):
 
     return loss, losses
 
+
 def XOR_Cumulative(out_dict: dict, args):
     """Xor cumulative loss
 
@@ -751,6 +768,7 @@ def XOR_Cumulative(out_dict: dict, args):
         losses.update(losses3)
 
     return loss + args.gamma * mitigation, losses
+
 
 def MNMATH_Classification(out_dict: dict, args):
     """XOR classification loss
@@ -838,7 +856,10 @@ def MNMATH_Concept_Match(out_dict: dict, args):
         filtered_concepts = concepts[:, i].squeeze(1)
 
         specific_concepts = [0, 5, 9]
-        mask = torch.isin(filtered_concepts, torch.tensor(specific_concepts).to(filtered_concepts.device)).to(filtered_concepts.device)
+        mask = torch.isin(
+            filtered_concepts,
+            torch.tensor(specific_concepts).to(filtered_concepts.device),
+        ).to(filtered_concepts.device)
 
         filtered_concepts = filtered_concepts[mask]
         filtered_predictions = filtered_rep[mask]
@@ -852,6 +873,7 @@ def MNMATH_Concept_Match(out_dict: dict, args):
     losses = {"c-loss": loss.item()}
 
     return loss, losses
+
 
 def MNMATH_Cumulative(out_dict: dict, args):
     """Xor cumulative loss
