@@ -14,12 +14,17 @@ class BOIA(BaseDataset):
         super().__init__(args)
 
     def get_data_loaders(self):
+        import os
         start = time.time()
 
-        image_dir = "data/bdd2048/"
-        train_data_path = "data/bdd2048/train_BDD_OIA.pkl"
-        val_data_path = "data/bdd2048/val_BDD_OIA.pkl"
-        test_data_path = "data/bdd2048/test_BDD_OIA.pkl"
+        # Get the directory where this file is located, then navigate to data folder
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(base_dir, "data", "bdd2048")
+        
+        image_dir = data_dir + "/"
+        train_data_path = os.path.join(data_dir, "train_BDD_OIA.pkl")
+        val_data_path = os.path.join(data_dir, "val_BDD_OIA.pkl")
+        test_data_path = os.path.join(data_dir, "test_BDD_OIA.pkl")
 
         self.dataset_train = BOIADataset(
             pkl_file_path=train_data_path,
