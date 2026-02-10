@@ -1,3 +1,7 @@
 *.npy
 *.png
 metrics.txt
+/logs/
+checkpoints/
+/data/
+/wandb
