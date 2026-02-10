@@ -37,7 +37,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
             "mini_patterns",
             "boia",
             "xor",
-            "mnmath"
+            "mnmath",
         ],
         help="Which operation to choose.",
     )
@@ -189,7 +189,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         action="store_true",
         help="Whether to employ BOIA OOD-knowledge (Ambulance) only for DPL",
     )
-    
+
     # parameters for curriculum learning
     parser.add_argument(
         "--curriculum",
@@ -214,9 +214,9 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         "--curriculum_steps",
         type=int,
         default=5,
-        help="Number of curriculum phases (from easy to hard)."
+        help="Number of curriculum phases (from easy to hard).",
     )
-    
+
     # parameters for contrastive learning framwork
     parser.add_argument(
         "--contrastive",
@@ -224,27 +224,56 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         default=False,
         help="Whether to use contrastive learning framework.",
     )
-    
+
     parser.add_argument(
         "--contrastive_temperature",
         type=float,
         default=0.5,
         help="Temperature parameter for contrastive loss.",
     )
-    
+
     parser.add_argument(
         "--w_contrastive",
         type=float,
         default=1.0,
         help="Weight for contrastive loss component.",
     )
-    
+
+    # active learning framework
+    parser.add_argument(
+        "--active_learning",
+        action="store_true",
+        default=False,
+        help="Whether to use active learning framework.",
+    )
+
+    parser.add_argument(
+        "--active_type",
+        type=str,
+        default="random",
+        choices=["random", "risk"],
+        help="Type of active learning strategy to employ.",
+    )
+
+    parser.add_argument(
+        "--al_cycles",
+        type=int,
+        default=10,
+        help="Number of active learning cycles.",
+    )
+
+    parser.add_argument(
+        "--al_query_size",
+        type=int,
+        default=10,
+        help="Number of samples to label per active learning cycle.",
+    )
     # others
     parser.add_argument(
         "--to_add",
         default="",
         type=str,
-        help="To add at the end of the model name when saving."
+        help="To add at the end of the model name when saving.",
     )
 
 

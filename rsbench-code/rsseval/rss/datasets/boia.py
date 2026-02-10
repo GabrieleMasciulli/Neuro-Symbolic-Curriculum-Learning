@@ -4,6 +4,7 @@ from datasets.utils.boia_creation import BOIADataset
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 from backbones.boia_linear import BOIAConceptizer
 from backbones.boia_mlp import BOIAMLP
+import numpy as np
 import time
 
 
@@ -15,12 +16,13 @@ class BOIA(BaseDataset):
 
     def get_data_loaders(self):
         import os
+
         start = time.time()
 
         # Get the directory where this file is located, then navigate to data folder
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_dir = os.path.join(base_dir, "data", "bdd2048")
-        
+
         image_dir = data_dir + "/"
         train_data_path = os.path.join(data_dir, "train_BDD_OIA.pkl")
         val_data_path = os.path.join(data_dir, "val_BDD_OIA.pkl")
@@ -93,6 +95,28 @@ class BOIA(BaseDataset):
     def get_concept_labels(self):
         sorted_concepts = sorted(CONCEPTS_ORDER, key=CONCEPTS_ORDER.get)
         return sorted_concepts
+
+    def give_supervision_to(self, indices):
+        """Give concept supervision only to specific sample indices.
+
+        Sets all training concepts to -1 (no supervision), then restores
+        the real concept labels only for the specified indices.
+
+        Args:
+            indices: list or array of sample indices to supervise.
+        """
+        indices = np.array(indices)
+
+        # Remove all supervision
+        self.dataset_train.concepts[:] = -1
+
+        # Restore supervision for selected indices
+        self.dataset_train.concepts[indices] = self.dataset_train.real_concepts[indices]
+
+        print(
+            f"Supervision given to {len(indices)} / {len(self.dataset_train)} samples"
+        )
+        return self
 
     def print_stats(self):
         print("## Statistics ##")

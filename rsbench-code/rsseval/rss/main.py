@@ -19,6 +19,7 @@ from utils.args import *
 from utils.checkpoint import save_model, create_load_ckpt
 from utils.probe import probe
 
+from utils.train_active import train_active
 from argparse import Namespace
 import wandb
 
@@ -160,6 +161,9 @@ def tune(args):
             loss = model.get_loss(args)
             model.start_optim(args)
 
+            if args.active_learning:
+                train_active(model, dataset, loss, args)
+
             train(model, dataset, loss, args)
 
     sweep_id = wandb.sweep(sweep=sweep_conf, project=args.proj_name)
@@ -213,6 +217,8 @@ def main(args):
             probe(model, dataset, args)
         elif args.posthoc:
             test(model, dataset, args)  # test the model if post-hoc is passed
+        elif args.active_learning:
+            train_active(model, dataset, loss, args)
         else:
             train(model, dataset, loss, args)  # train the model otherwise
             save_model(model, args)  # save the model parameters

@@ -2,6 +2,7 @@ import torch
 import torch.utils.data
 from torch.utils.data import Dataset
 import pickle
+import numpy as np
 from datasets.utils.mnist_creation import generate_r_seq
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 
@@ -69,6 +70,9 @@ class BOIADataset(Dataset):
         if self.use_contrastive:
             self.contrastive_noise_std = 0.1  # Standard deviation for Gaussian noise
 
+        # Pre-load all concept labels into memory so we can manipulate supervision
+        self._preload_concepts()
+
         for i in range(self.__len__()):
             self.__getitem__(i)
 
@@ -77,7 +81,22 @@ class BOIADataset(Dataset):
                 "Given supervision to",
                 len(self.data) if self.c_sup == 1 else self.numel,
             )
-        # quit()
+
+    def _preload_concepts(self):
+        """Pre-load all concept labels into memory as numpy arrays.
+
+        This allows active learning to manipulate concept supervision
+        via give_supervision_to() without reloading from disk.
+        """
+        all_concepts = []
+        for img_data in self.data:
+            img_path = img_data["img_path"]
+            t_path = img_path[:-4] + ".pt"
+            con_path = self.image_dir + "/concepts/" + t_path
+            attr_label = torch.load(con_path).squeeze(0).numpy()
+            all_concepts.append(attr_label)
+        self.real_concepts = np.array(all_concepts)
+        self.concepts = np.copy(self.real_concepts)
 
     def __len__(self):
         return len(self.data)
@@ -89,33 +108,18 @@ class BOIADataset(Dataset):
         t_path = img_path[:-4] + ".pt"
         img_path = self.image_dir + "/inputs/" + t_path
         lab_path = self.image_dir + "/labels/" + t_path
-        con_path = self.image_dir + "/concepts/" + t_path
 
         view1 = torch.load(img_path).squeeze(0)
         class_label = torch.load(lab_path).squeeze(0)
-        attr_label = torch.load(con_path).squeeze(0)
 
-        # assert class_label[4] == 0, class_label
-        # NOTE: we are not interested in the last action
-
-        # filter for the concept supervision given
-        # if self.r_seq[idx] > self.c_sup:
-        #     attr_label[:] = -1
-        # elif not (self.which_c[0] == -1):
-        #     # print("entro?")
-        #     for c in range(attr_label.shape[0]):
-        #         if c not in self.which_c:
-        #             attr_label[c] = -1
-        # else:
-        #     self.numel += 1
+        # Use in-memory concept labels (supports active learning supervision)
+        attr_label = torch.tensor(self.concepts[idx], dtype=torch.float32)
 
         # filter for the concept supervision given
-
         if self.c_sup != 1:
             if self.r_seq[idx] > self.c_sup:
                 attr_label[:] = -1
             elif not (self.which_c[0] == -1):
-                # print("entro?")
                 for c in range(attr_label.shape[0]):
                     if c not in self.which_c:
                         attr_label[c] = -1

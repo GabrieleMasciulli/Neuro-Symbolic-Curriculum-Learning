@@ -5,7 +5,10 @@ from backbones.addmnist_joint import MNISTPairsEncoder, MNISTPairsDecoder
 from backbones.addmnist_single import MNISTSingleEncoder
 from backbones.mnistcnn import MNISTAdditionCNN
 from backbones.disjointmnistcnn import DisjointMNISTAdditionCNN
-from utils.risk_curriculum_sampler import ClassSpecificRiskCurriculumSampler, InstanceRiskCurriculumSampler
+from utils.risk_curriculum_sampler import (
+    ClassSpecificRiskCurriculumSampler,
+    InstanceRiskCurriculumSampler,
+)
 import numpy as np
 from copy import deepcopy
 
@@ -29,10 +32,10 @@ class HALFMNIST(BaseDataset):
         self.dataset_val = dataset_val
         self.dataset_test = dataset_test
         self.ood_test = ood_test
-        
+
         # Initialize curriculum sampler if curriculum learning is enabled
         self.curriculum_sampler = None
-        
+
         if self.args.curriculum and self.args.risk_type:
             if self.args.risk_type == "class":
                 risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
@@ -48,15 +51,17 @@ class HALFMNIST(BaseDataset):
                     # Replace train_sampler with curriculum_sampler
                     self.train_sampler = self.curriculum_sampler
                 else:
-                    print(f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler.")
-                    
+                    print(
+                        f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler."
+                    )
+
             elif self.args.risk_type == "instance":
                 print(f"\n--- Instance-Specific Curriculum Learning Enabled ---")
                 risk_path = f"instance_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
                 if os.path.exists(risk_path):
                     instance_risks = np.load(risk_path)
                     self.instance_risks = instance_risks
-                    print(f"Loaded instance risks from {risk_path}")    
+                    print(f"Loaded instance risks from {risk_path}")
                     # Initialize with phase 1.0 (will be updated per epoch in training loop)
                     self.curriculum_sampler = InstanceRiskCurriculumSampler(
                         self.dataset_train, self.instance_risks, current_phase=1.0
@@ -229,7 +234,7 @@ class HALFMNIST(BaseDataset):
         train_dataset.concepts = train_dataset.concepts[train_mask]  # [:2000, :]
         val_dataset.concepts = val_dataset.concepts[val_mask]
         test_dataset.concepts = test_dataset.concepts[test_mask]
-        
+
         train_dataset.real_concepts = train_dataset.real_concepts[train_mask]
         val_dataset.real_concepts = val_dataset.real_concepts[val_mask]
         test_dataset.real_concepts = test_dataset.real_concepts[test_mask]
@@ -305,6 +310,28 @@ class HALFMNIST(BaseDataset):
         print("Validation samples", len(self.dataset_val.data))
         print("Test samples", len(self.dataset_test.data))
         print("Test OOD samples", len(self.ood_test.data))
+
+    def give_supervision_to(self, indices):
+        """
+        Give concept supervision only to specific sample indices.
+
+        Args:
+            indices: list or array of sample indices to supervise
+        """
+        # First, set all concepts to -1 (no supervision)
+        self.dataset_train.concepts[:] = -1
+
+        # Then, restore supervision only for the specified indices
+        indices = np.array(indices)
+
+        # Supervise all concepts for the specified indices
+        self.dataset_train.concepts[indices] = self.dataset_train.real_concepts[indices]
+
+        print(
+            f"Supervision given to {len(indices)} samples out of {len(self.dataset_train.concepts)}"
+        )
+
+        return self
 
 
 if __name__ == "__main__":

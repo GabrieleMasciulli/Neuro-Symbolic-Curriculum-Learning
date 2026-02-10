@@ -1,6 +1,9 @@
 from datasets.utils.base_dataset import BaseDataset, get_loader
 from datasets.utils.mnist_creation import load_2MNIST
-from utils.risk_curriculum_sampler import ClassSpecificRiskCurriculumSampler, InstanceRiskCurriculumSampler
+from utils.risk_curriculum_sampler import (
+    ClassSpecificRiskCurriculumSampler,
+    InstanceRiskCurriculumSampler,
+)
 from backbones.addmnist_joint import MNISTPairsEncoder, MNISTPairsDecoder
 from backbones.addmnist_single import MNISTSingleEncoder
 from backbones.mnistcnn import MNISTAdditionCNN
@@ -81,7 +84,6 @@ class SHORTMNIST(BaseDataset):
         test_sample_weights = test_class_weights[test_targets]
         ood_sample_weights = ood_class_weights[ood_targets]
         ood_sample_weights_2 = ood_class_weights_2[ood_targets_2]
-        
 
         # Create Samplers
         self.train_sampler = WeightedRandomSampler(
@@ -109,7 +111,7 @@ class SHORTMNIST(BaseDataset):
             num_samples=len(ood_sample_weights_2),
             replacement=True,
         )
-        
+
         # Initialize curriculum sampler if curriculum learning is enabled
         self.curriculum_sampler = None
         self.concept_risks = None
@@ -128,14 +130,16 @@ class SHORTMNIST(BaseDataset):
                     # Replace train_sampler with curriculum_sampler
                     self.train_sampler = self.curriculum_sampler
                 else:
-                    print(f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler.")
-                    
+                    print(
+                        f"\nWarning: Curriculum enabled but risk file {risk_path} not found. Using default sampler."
+                    )
+
             elif self.args.risk_type == "instance":
                 print(f"\n--- Instance-Specific Curriculum Learning Enabled ---")
                 risk_path = f"instance_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
                 if os.path.exists(risk_path):
                     instance_risks = np.load(risk_path)
-                    print(f"Loaded instance risks from {risk_path}")    
+                    print(f"Loaded instance risks from {risk_path}")
                     # Initialize with phase 1.0 (will be updated per epoch in training loop)
                     self.curriculum_sampler = InstanceRiskCurriculumSampler(
                         self.dataset_train, instance_risks, current_phase=1.0
@@ -166,8 +170,27 @@ class SHORTMNIST(BaseDataset):
     def get_labels(self):
         return [str(i) for i in range(9)]
 
-    def give_supervision_to(self, percentage):
-        pass  # TODO
+    def give_supervision_to(self, indices):
+        """Give concept supervision only to specific sample indices.
+
+        Sets all training concepts to -1 (no supervision), then restores
+        the real concept labels only for the specified indices.
+
+        Args:
+            indices: list or array of sample indices to supervise.
+        """
+        indices = np.array(indices)
+
+        # Remove all supervision
+        self.dataset_train.concepts[:] = -1
+
+        # Restore supervision for selected indices
+        self.dataset_train.concepts[indices] = self.dataset_train.real_concepts[indices]
+
+        print(
+            f"Supervision given to {len(indices)} / {len(self.dataset_train.concepts)} samples"
+        )
+        return self
 
     def filtrate(self, train_dataset, val_dataset, test_dataset):
 
@@ -396,7 +419,7 @@ class SHORTMNIST(BaseDataset):
         train_dataset.concepts = train_dataset.concepts[train_mask]
         val_dataset.concepts = val_dataset.concepts[val_mask]
         test_dataset.concepts = test_dataset.concepts[test_mask]
-        
+
         train_dataset.real_concepts = train_dataset.real_concepts[train_mask]
         val_dataset.real_concepts = val_dataset.real_concepts[val_mask]
         test_dataset.real_concepts = test_dataset.real_concepts[test_mask]

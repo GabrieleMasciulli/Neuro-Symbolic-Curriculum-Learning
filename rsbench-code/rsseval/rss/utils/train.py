@@ -26,7 +26,6 @@ import matplotlib.pyplot as plt
 
 from warmup_scheduler import GradualWarmupScheduler
 from sklearn.metrics import multilabel_confusion_matrix, confusion_matrix
-from utils.losses import InfoNCE_loss
 
 
 def convert_to_categories(elements):
@@ -320,70 +319,6 @@ def save_predictions_to_csv(model, test_set, csv_name, dataset):
         writer = csv.writer(file)
         writer.writerows(concatenated_tensor)
 
-def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
-    """TRAINING WITH ACTIVE LEARNING FRAMEWORK
-
-    Args:
-        model (MnistDPL): network
-        dataset (BaseDataset): dataset Kandinksy
-        _loss (ADDMNIST_DPL): loss function
-        args: parsed args
-
-    Returns:
-        None: This function does not return a value.
-    """
-    if args.dataset in ["shortmnist"] and args.joint:
-        to_add += "_joint"
-
-    if args.curriculum:
-        to_add += f"_curriculum_{args.risk_type}"
-
-    if (
-        "rec" in args.model
-    ):  # models with reconstruction term i.e. decoder in the architecture
-        to_add += f"_w-rec{args.w_rec}"
-
-    if args.entropy and args.w_h > 0:  # entropy weight
-        to_add += f"_entropy{args.w_h}"
-
-    if args.contrastive:
-        to_add += f"_contrastive{args.w_contrastive}"
-
-    save_path = (
-        f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
-    )
-
-    # Default Setting for Training
-    model.to(model.device)
-
-    if args.dataset == "shortmnist":
-        model = model.float()
-
-    train_loader, val_loader, test_loader = dataset.get_data_loaders()
-    dataset.print_stats()
-
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(model.opt, args.exp_decay)
-    w_scheduler = None
-    if args.warmup_steps > 0:
-        w_scheduler = GradualWarmupScheduler(model.opt, 1.0, args.warmup_steps)
-
-    if not args.tuning and args.wandb is not None:
-        run_name = f"{args.dataset}-{args.model}-seed{args.seed}"
-
-        fprint("\n---wandb on\n")
-        wandb.init(
-            project=args.project,
-            group=args.group_name,
-            name=run_name,
-            config=args,
-        )
-
-    fprint("\n--- Start of Training ---\n")
-
-    # default for warm-up
-    model.opt.zero_grad()
-    model.opt.step()
-
 
 def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
     """TRAINING
@@ -427,9 +362,6 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
     if args.c_sup > 0:
         to_add += f"_c-sup{args.c_sup}"
-
-    if args.active_learning:
-        to_add += f"_active-{args.active_type}"
 
     save_path = (
         f"./checkpoints/best_model_{args.dataset}_{args.model}_{args.seed}{to_add}.pth"
