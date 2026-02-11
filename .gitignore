@@ -5,3 +5,5 @@ metrics.txt
 checkpoints/
 /data/
 /wandb
+/scripts
+*.csv
