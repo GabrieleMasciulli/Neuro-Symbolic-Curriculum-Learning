@@ -240,7 +240,10 @@ def ADDMNIST_Cumulative(out_dict: dict, args):
         loss2, losses2 = ADDMNIST_Entropy(out_dict, args)
         mitigation += args.w_h * loss2
         losses.update(losses2)
-    if args.c_sup > 0:
+        
+    # when active learning is on, each cycle a new set of concept labels is revealed,
+    # so we want to always include the concept match loss
+    if args.c_sup > 0 or args.active_learning: 
         loss3, losses3 = ADDMNIST_Concept_Match(out_dict, args)
         mitigation += args.w_c * loss3
         losses.update(losses3)
@@ -551,7 +554,7 @@ def SDDOIA_Cumulative(out_dict: dict, args):
         loss2, losses2 = SDDOIA_Entropy(out_dict, args)
         mitigation += args.w_h * loss2
         losses.update(losses2)
-    if args.c_sup > 0:
+    if args.c_sup > 0 or args.active_learning:
         loss3, losses3 = SDDOIA_Concept_Match(out_dict, args)
         mitigation += args.w_c * loss3
         losses.update(losses3)

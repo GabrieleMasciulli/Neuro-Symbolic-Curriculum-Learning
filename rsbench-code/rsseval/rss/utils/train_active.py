@@ -181,6 +181,9 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
     )
 
     # --- Setup ---
+    # Store initial model state for resetting each cycle
+    initial_state_dict = model.state_dict().copy()
+    
     model.to(model.device)
     if args.dataset == "shortmnist":
         model = model.float()
@@ -194,17 +197,6 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
 
     best_f1_global = 0.0
 
-    # --- Wandb ---
-    if not args.tuning and args.wandb is not None:
-        run_name = f"{args.dataset}-{args.model}-seed{args.seed}-active-{active_type}"
-        fprint("\n---wandb on\n")
-        wandb.init(
-            project=args.project,
-            group=args.group_name,
-            name=run_name,
-            config=args,
-        )
-
     fprint("\n--- Start of Active Learning ---\n")
     fprint(f"  Strategy: {active_type}")
     fprint(
@@ -215,9 +207,24 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
 
     # --- Active Learning Loop ---
     for cycle in range(al_cycles):
+        # --- Wandb ---
+        if not args.tuning and args.wandb is not None:
+            run_name = f"{args.dataset}-{args.model}-seed{args.seed}-active-{active_type}-cycle{cycle+1}-samples{len(labeled_indices)+al_query_size}"
+            fprint("\n---wandb on\n")
+            wandb.init(
+                project=args.project,
+                group=args.group_name,
+                name=run_name,
+                config=args,
+            )
+        
         fprint(f"\n{'='*60}")
         fprint(f"  Active Learning Cycle {cycle + 1}/{al_cycles}")
         fprint(f"{'='*60}")
+
+        # Reset model weights to initial state
+        model.load_state_dict(initial_state_dict)
+        fprint(f"  Model weights reset to initial state")
 
         # select new samples from unlabeled pool
         if active_type == "random":
@@ -289,33 +296,34 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
                 }
             )
 
-    # --- Final Evaluation ---
-    fprint(f"\n{'='*60}")
+            # --- Final Evaluation ---
+            fprint(f"\n{'='*60}")
+
+            # Load best model and evaluate on test
+            if os.path.exists(save_path):
+                model.load_state_dict(torch.load(save_path))
+
+            model.eval()
+            y_true, c_true, y_pred, c_pred, p_cs, p_ys, p_cs_all, p_ys_all = evaluate_metrics(
+                model, test_loader, args, last=True
+            )
+
+            yac, yf1 = evaluate_mix(y_true, y_pred)
+            cac, cf1 = evaluate_mix(c_true, c_pred)
+            h_c = mean_entropy(p_cs_all, model.n_facts)
+
+            fprint(f"Test Concepts:  ACC: {cac}, F1: {cf1}")
+            fprint(f"Test Labels:    ACC: {yac}, F1: {yf1}")
+            fprint(f"Test Entropy:   H(C): {h_c}")
+
+            if not args.tuning and args.wandb is not None:
+                wandb.log({"test-y-acc": yac * 100, "test-y-f1": yf1 * 100})
+                wandb.log({"test-c-acc": cac * 100, "test-c-f1": cf1 * 100})
+                wandb.finish()
+    
+    # --- End of Active Learning ---
     fprint(f"  Active Learning Complete")
     fprint(
         f"  Best F1: {best_f1_global:.4f} with {len(labeled_indices)} labeled samples"
     )
     fprint(f"{'='*60}\n")
-
-    # Load best model and evaluate on test
-    if os.path.exists(save_path):
-        model.load_state_dict(torch.load(save_path))
-
-    model.eval()
-    y_true, c_true, y_pred, c_pred, p_cs, p_ys, p_cs_all, p_ys_all = evaluate_metrics(
-        model, test_loader, args, last=True
-    )
-
-    if "patterns" not in args.task:
-        yac, yf1 = evaluate_mix(y_true, y_pred)
-        cac, cf1 = evaluate_mix(c_true, c_pred)
-        h_c = mean_entropy(p_cs_all, model.n_facts)
-
-        fprint(f"Test Concepts:  ACC: {cac}, F1: {cf1}")
-        fprint(f"Test Labels:    ACC: {yac}, F1: {yf1}")
-        fprint(f"Test Entropy:   H(C): {h_c}")
-
-    if not args.tuning and args.wandb is not None:
-        wandb.log({"test-y-acc": yac * 100, "test-y-f1": yf1 * 100})
-        wandb.log({"test-c-acc": cac * 100, "test-c-f1": cf1 * 100})
-        wandb.finish()

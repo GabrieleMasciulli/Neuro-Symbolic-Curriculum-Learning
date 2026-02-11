@@ -318,17 +318,18 @@ class HALFMNIST(BaseDataset):
         Args:
             indices: list or array of sample indices to supervise
         """
-        # First, set all concepts to -1 (no supervision)
-        self.dataset_train.concepts[:] = -1
-
-        # Then, restore supervision only for the specified indices
         indices = np.array(indices)
 
-        # Supervise all concepts for the specified indices
+        # Restore supervision only for the specified indices
+        # (preserves any existing supervision from previous calls)
         self.dataset_train.concepts[indices] = self.dataset_train.real_concepts[indices]
 
+        # Count total supervised samples
+        n_supervised = np.sum(self.dataset_train.concepts[:, 0] != -1)
+        
         print(
-            f"Supervision given to {len(indices)} samples out of {len(self.dataset_train.concepts)}"
+            f"Supervision given to {len(indices)} new samples. "
+            f"Total supervised: {n_supervised}/{len(self.dataset_train.concepts)}"
         )
 
         return self

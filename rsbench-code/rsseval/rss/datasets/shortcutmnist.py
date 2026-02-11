@@ -171,14 +171,7 @@ class SHORTMNIST(BaseDataset):
         return [str(i) for i in range(9)]
 
     def give_supervision_to(self, indices):
-        """Give concept supervision only to specific sample indices.
-
-        Sets all training concepts to -1 (no supervision), then restores
-        the real concept labels only for the specified indices.
-
-        Args:
-            indices: list or array of sample indices to supervise.
-        """
+        """Give concept supervision only to specific sample indices."""
         indices = np.array(indices)
 
         # Remove all supervision
