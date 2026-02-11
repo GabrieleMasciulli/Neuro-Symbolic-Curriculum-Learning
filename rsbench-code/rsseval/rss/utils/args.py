@@ -251,7 +251,7 @@ def add_experiment_args(parser: ArgumentParser) -> None:
         "--active_type",
         type=str,
         default="random",
-        choices=["random", "risk"],
+        choices=["random", "class_risk", "instance_risk"],
         help="Type of active learning strategy to employ.",
     )
 

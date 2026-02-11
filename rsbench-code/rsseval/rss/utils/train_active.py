@@ -18,6 +18,7 @@ from utils.metrics import (
 )
 from utils import fprint
 from warmup_scheduler import GradualWarmupScheduler
+from utils.instance_specific_risk import compute_instance_specific_risks_from_model
 
 
 # ---------------------------------------------------------------------------
@@ -38,24 +39,38 @@ def select_random(unlabeled_indices: list, n_samples: int) -> list:
     return selected
 
 
-def select_risk(unlabeled_indices: list, n_samples: int, model, dataset, args) -> list:
+def select_instance_risk(unlabeled_indices: list, n_samples: int, model, loader, args) -> list:
     """Select samples based on risk / uncertainty (TODO: implement scoring).
 
     Args:
         unlabeled_indices: list of indices not yet labeled.
         n_samples: number of samples to select.
         model: the current model (can be used for uncertainty estimation).
-        dataset: the dataset object.
+        loader: DataLoader for the dataset.
         args: parsed arguments.
 
     Returns:
         List of selected indices.
-    """
-    # TODO: implement risk-based sample selection
-    raise NotImplementedError(
-        "Risk-based active learning selection is not yet implemented. "
-        "Use --active_type random for now."
+    """ 
+    print(f"\n--- Computing instance-specific risks ---")
+    
+    risks = compute_instance_specific_risks_from_model(
+        model, loader, max_digit=9 if args.dataset == "shortmnist" else 4
     )
+
+    # Sort all indices by risk in descending order (highest risk first)
+    sorted_indices = np.argsort(risks)[::-1]
+
+    # Filter to only unlabeled indices and select up to n_samples
+    unlabeled_set = set(unlabeled_indices)
+    selected = []
+    for idx in sorted_indices:
+        if int(idx) in unlabeled_set:
+            selected.append(int(idx))
+        if len(selected) >= n_samples:
+            break
+
+    return selected
 
 
 def _train_cycle(
@@ -229,10 +244,11 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
         # select new samples from unlabeled pool
         if active_type == "random":
             selected = select_random(unlabeled_indices, al_query_size)
-        elif active_type == "risk":
-            selected = select_risk(
-                unlabeled_indices, al_query_size, model, dataset, args
+        elif active_type == "instance_risk":
+            selected = select_instance_risk(
+                unlabeled_indices, al_query_size, model, train_loader, args
             )
+        # todo: implement class-specific risk selection strategy
 
         # move selected samples from unlabeled → labeled (no duplicates)
         labeled_indices.extend(selected)
@@ -244,6 +260,20 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
             f"  Labeled: {len(labeled_indices)} | "
             f"Unlabeled: {len(unlabeled_indices)}"
         )
+
+        # Debug: print concept distribution of selected samples
+        all_real_concepts = dataset.dataset_train.real_concepts[labeled_indices]
+        concept_counts = {}
+        for concept_pair in all_real_concepts:
+            for c in concept_pair:
+                c_int = int(c)
+                concept_counts[c_int] = concept_counts.get(c_int, 0) + 1
+        print(f"\n=== Cycle {cycle + 1} Concept Summary (all labeled samples) ===")
+        for concept_id, count in sorted(concept_counts.items()):
+            print(f"  Concept {concept_id}: {count} samples")
+        print(f"  Total unique concepts: {len(concept_counts)} / "
+              f"{10 if args.dataset == 'shortmnist' else 5}")
+        print("=" * 50)
 
         # update concept supervision on the dataset
         dataset.give_supervision_to(labeled_indices)
