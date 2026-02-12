@@ -172,7 +172,7 @@ class SHORTMNIST(BaseDataset):
 
     def give_supervision_to(self, indices):
         """Give concept supervision only to specific sample indices."""
-        indices = np.array(indices)
+        indices = np.array(indices, dtype=int)
 
         # Remove all supervision
         self.dataset_train.concepts[:] = -1

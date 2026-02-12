@@ -221,10 +221,59 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
     fprint(f"  Total train samples: {n_train}\n")
 
     # --- Active Learning Loop ---
-    for cycle in range(al_cycles):
+    for cycle in range(al_cycles + 1): # include initial cycle with 0 supervision
+        fprint(f"\n{'='*60}")
+        fprint(f"  Active Learning Cycle {cycle}/{al_cycles}")
+        fprint(f"{'='*60}")
+
+        # --- Sample selection (skip first cycle: train with 0 supervision) ---
+        if cycle == 0:
+            fprint(f"  Cycle 1: Training with 0 supervised samples")
+        else:
+            # For instance_risk, load best model from previous cycle
+            if active_type == "instance_risk" and os.path.exists(save_path):
+                model.load_state_dict(torch.load(save_path))
+                model.eval()
+                fprint(f"  Loaded best model from previous cycle for risk computation")
+
+            # select new samples from unlabeled pool
+            if active_type == "random":
+                selected = select_random(unlabeled_indices, al_query_size)
+            elif active_type == "instance_risk":
+                selected = select_instance_risk(
+                    unlabeled_indices, al_query_size, model, train_loader, args
+                )
+            # todo: implement class-specific risk selection strategy
+
+            # move selected samples from unlabeled → labeled (no duplicates)
+            labeled_indices.extend(selected)
+            for idx in selected:
+                unlabeled_indices.remove(idx)
+
+            fprint(f"  Selected {len(selected)} new samples")
+
+            # Debug: print concept distribution of selected samples
+            all_real_concepts = dataset.dataset_train.real_concepts[labeled_indices]
+            concept_counts = {}
+            for concept_pair in all_real_concepts:
+                for c in concept_pair:
+                    c_int = int(c)
+                    concept_counts[c_int] = concept_counts.get(c_int, 0) + 1
+            print(f"\n=== Cycle {cycle} Concept Summary (all labeled samples) ===")
+            for concept_id, count in sorted(concept_counts.items()):
+                print(f"  Concept {concept_id}: {count} samples")
+            print(f"  Total unique concepts: {len(concept_counts)} / "
+                  f"{10 if args.dataset == 'shortmnist' else 5}")
+            print("=" * 50)
+
+        fprint(
+            f"  Labeled: {len(labeled_indices)} | "
+            f"Unlabeled: {len(unlabeled_indices)}"
+        )
+
         # --- Wandb ---
         if not args.tuning and args.wandb is not None:
-            run_name = f"{args.dataset}-{args.model}-seed{args.seed}-active-{active_type}-cycle{cycle+1}-samples{len(labeled_indices)+al_query_size}"
+            run_name = f"{args.dataset}-{args.model}-seed{args.seed}-active-{active_type}-cycle{cycle}-samples{len(labeled_indices)}"
             fprint("\n---wandb on\n")
             wandb.init(
                 project=args.project,
@@ -232,48 +281,10 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
                 name=run_name,
                 config=args,
             )
-        
-        fprint(f"\n{'='*60}")
-        fprint(f"  Active Learning Cycle {cycle + 1}/{al_cycles}")
-        fprint(f"{'='*60}")
 
-        # Reset model weights to initial state
+        # Reset model weights to initial state for training
         model.load_state_dict(initial_state_dict)
         fprint(f"  Model weights reset to initial state")
-
-        # select new samples from unlabeled pool
-        if active_type == "random":
-            selected = select_random(unlabeled_indices, al_query_size)
-        elif active_type == "instance_risk":
-            selected = select_instance_risk(
-                unlabeled_indices, al_query_size, model, train_loader, args
-            )
-        # todo: implement class-specific risk selection strategy
-
-        # move selected samples from unlabeled → labeled (no duplicates)
-        labeled_indices.extend(selected)
-        for idx in selected:
-            unlabeled_indices.remove(idx)
-
-        fprint(f"  Selected {len(selected)} new samples")
-        fprint(
-            f"  Labeled: {len(labeled_indices)} | "
-            f"Unlabeled: {len(unlabeled_indices)}"
-        )
-
-        # Debug: print concept distribution of selected samples
-        all_real_concepts = dataset.dataset_train.real_concepts[labeled_indices]
-        concept_counts = {}
-        for concept_pair in all_real_concepts:
-            for c in concept_pair:
-                c_int = int(c)
-                concept_counts[c_int] = concept_counts.get(c_int, 0) + 1
-        print(f"\n=== Cycle {cycle + 1} Concept Summary (all labeled samples) ===")
-        for concept_id, count in sorted(concept_counts.items()):
-            print(f"  Concept {concept_id}: {count} samples")
-        print(f"  Total unique concepts: {len(concept_counts)} / "
-              f"{10 if args.dataset == 'shortmnist' else 5}")
-        print("=" * 50)
 
         # update concept supervision on the dataset
         dataset.give_supervision_to(labeled_indices)
@@ -319,7 +330,7 @@ def train_active(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, arg
         if not args.tuning and args.wandb is not None:
             wandb.log(
                 {
-                    "al_cycle": cycle + 1,
+                    "al_cycle": cycle,
                     "al_labeled_samples": len(labeled_indices),
                     "al_cycle_best_f1": cycle_best_f1,
                     "al_global_best_f1": best_f1_global,

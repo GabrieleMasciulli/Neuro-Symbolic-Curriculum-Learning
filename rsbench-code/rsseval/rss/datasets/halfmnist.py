@@ -318,7 +318,7 @@ class HALFMNIST(BaseDataset):
         Args:
             indices: list or array of sample indices to supervise
         """
-        indices = np.array(indices)
+        indices = np.array(indices, dtype=int)
 
         # Restore supervision only for the specified indices
         # (preserves any existing supervision from previous calls)

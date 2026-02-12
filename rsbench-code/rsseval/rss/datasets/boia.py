@@ -105,7 +105,7 @@ class BOIA(BaseDataset):
         Args:
             indices: list or array of sample indices to supervise.
         """
-        indices = np.array(indices)
+        indices = np.array(indices, dtype=int)
 
         # Remove all supervision
         self.dataset_train.concepts[:] = -1
