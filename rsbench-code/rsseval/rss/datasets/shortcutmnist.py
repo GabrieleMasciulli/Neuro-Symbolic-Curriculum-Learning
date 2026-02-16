@@ -117,7 +117,9 @@ class SHORTMNIST(BaseDataset):
         self.concept_risks = None
         if self.args.curriculum and self.args.risk_type:
             if self.args.risk_type == "class":
-                risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                risk_path = (
+                    f"class_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
                 if os.path.exists(risk_path):
                     self.concept_risks = np.load(risk_path)
                     print(f"\n--- Curriculum Learning Enabled ---")
@@ -136,7 +138,9 @@ class SHORTMNIST(BaseDataset):
 
             elif self.args.risk_type == "instance":
                 print(f"\n--- Instance-Specific Curriculum Learning Enabled ---")
-                risk_path = f"instance_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                risk_path = (
+                    f"instance_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
                 if os.path.exists(risk_path):
                     instance_risks = np.load(risk_path)
                     print(f"Loaded instance risks from {risk_path}")

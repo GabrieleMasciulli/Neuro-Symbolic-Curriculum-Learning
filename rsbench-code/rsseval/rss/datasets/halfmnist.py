@@ -38,7 +38,9 @@ class HALFMNIST(BaseDataset):
 
         if self.args.curriculum and self.args.risk_type:
             if self.args.risk_type == "class":
-                risk_path = f"class_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                risk_path = (
+                    f"class_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
                 if os.path.exists(risk_path):
                     self.concept_risks = np.load(risk_path)
                     print(f"\n--- Curriculum Learning Enabled ---")
@@ -57,7 +59,9 @@ class HALFMNIST(BaseDataset):
 
             elif self.args.risk_type == "instance":
                 print(f"\n--- Instance-Specific Curriculum Learning Enabled ---")
-                risk_path = f"instance_specific_risks_{self.args.dataset}_{self.args.model}_{self.args.seed}.npy"
+                risk_path = (
+                    f"instance_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
                 if os.path.exists(risk_path):
                     instance_risks = np.load(risk_path)
                     self.instance_risks = instance_risks
@@ -326,7 +330,7 @@ class HALFMNIST(BaseDataset):
 
         # Count total supervised samples
         n_supervised = np.sum(self.dataset_train.concepts[:, 0] != -1)
-        
+
         print(
             f"Supervision given to {len(indices)} new samples. "
             f"Total supervised: {n_supervised}/{len(self.dataset_train.concepts)}"

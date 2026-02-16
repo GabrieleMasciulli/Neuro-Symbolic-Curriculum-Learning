@@ -400,7 +400,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
         to_add = ""
 
         if args.curriculum:
-            to_add += "-curriculum"
+            to_add += f"_curriculum_{args.risk_type}"
 
         if (
             "rec" in args.model
@@ -467,19 +467,18 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             epoch_concepts = {}
             # Get all sampled indices for this epoch if curriculum is active
             sampled_indices = None
+
             if curriculum_sampler is not None:
                 sampled_indices = list(train_loader.sampler)
                 # Collect all concepts from sampled data
                 all_epoch_real_concepts = dataset.dataset_train.real_concepts[
                     sampled_indices
                 ]
-                for concept_pair in all_epoch_real_concepts:
-                    epoch_concepts[int(concept_pair[0])] = (
-                        epoch_concepts.get(int(concept_pair[0]), 0) + 1
-                    )
-                    epoch_concepts[int(concept_pair[1])] = (
-                        epoch_concepts.get(int(concept_pair[1]), 0) + 1
-                    )
+                for concept_tuple in all_epoch_real_concepts:
+                    for concept in concept_tuple:
+                        epoch_concepts[int(concept)] = (
+                            epoch_concepts.get(int(concept), 0) + 1
+                        )
 
         for i, data in enumerate(train_loader):
             images, labels, concepts = data
@@ -620,7 +619,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             args.curriculum
             and args.risk_type == "class"
             and curriculum_sampler is not None
-            and hasattr(args, "risk_update_freq")
+            and args.risk_update_freq is not None
         ):
             risk_update_freq = args.risk_update_freq
             if (epoch + 1) % risk_update_freq == 0 and epoch > 15:

@@ -143,7 +143,7 @@ def BOIA_get_loader(dataset, batch_size, val_test):
         drop_last=drop_last,
         num_workers=8,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=True,
     )
 
 
@@ -171,6 +171,7 @@ def XOR_get_loader(dataset, batch_size, val_test):
     return DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last
     )
+
 
 def MNMATH_get_loader(dataset, batch_size, val_test):
     if val_test:
