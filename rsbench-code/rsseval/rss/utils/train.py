@@ -488,7 +488,8 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             if args.contrastive and isinstance(images, (list, tuple)):
                 view1, view2 = images
                 view1, view2 = view1.to(model.device), view2.to(model.device)
-                out_dict = model(torch.cat([view1, view2]))
+                images = torch.cat([view1, view2])
+                out_dict = model(images)
 
                 # update out_dict with doubled targets
                 labels = torch.cat([labels, labels], dim=0)
