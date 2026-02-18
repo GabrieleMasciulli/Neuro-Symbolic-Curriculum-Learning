@@ -25,7 +25,12 @@ from utils import fprint
 import matplotlib.pyplot as plt
 
 from warmup_scheduler import GradualWarmupScheduler
-from sklearn.metrics import multilabel_confusion_matrix, confusion_matrix
+from sklearn.metrics import (
+    multilabel_confusion_matrix,
+    confusion_matrix,
+    accuracy_score as sk_accuracy_score,
+    f1_score as sk_f1_score,
+)
 
 
 def convert_to_categories(elements):
@@ -684,8 +689,17 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             )
 
         if "patterns" not in args.task:
-            yac, yf1 = evaluate_mix(y_true, y_pred)
-            cac, cf1 = evaluate_mix(c_true, c_pred)
+            if args.task == "boia":
+                # y_pred is already binarized by evaluate_metrics(last=True)
+                # Use micro F1 for consistency with train/val metrics
+                yac = sk_accuracy_score(y_true, y_pred)
+                yf1 = sk_f1_score(y_true, y_pred, average="micro")
+                # Element-wise concept accuracy (not subset), consistent with SDDOIA_eval_tloss_cacc_acc
+                cac = (c_true == c_pred).astype(float).mean()
+                cf1 = sk_f1_score(c_true.flatten(), c_pred.flatten(), average="macro")
+            else:
+                yac, yf1 = evaluate_mix(y_true, y_pred)
+                cac, cf1 = evaluate_mix(c_true, c_pred)
             h_c = mean_entropy(p_cs_all, model.n_facts)
 
             fprint(f"Concepts:\n    ACC: {cac}, F1: {cf1}")

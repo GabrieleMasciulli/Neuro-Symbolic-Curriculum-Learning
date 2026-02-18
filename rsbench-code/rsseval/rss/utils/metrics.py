@@ -32,7 +32,6 @@ def accuracy(output, target, topk=(1,)):
 
 
 def accuracy_binary(y_pred, y_true):
-
     # Split predictions into separate tensors for each label
     y_pred_split = torch.split(y_pred, 2, dim=1)
     y_pred_binary = torch.stack([pred.argmax(dim=1) for pred in y_pred_split], dim=1)
@@ -124,12 +123,12 @@ def evaluate_metrics(
     fcf1 = 0
     for i, data in enumerate(loader):
         images, labels, concepts = data
-        
+
         # Handle contrastive learning case: images may be a tuple/list of (view1, view2)
         # For evaluation, we only need the first view
         if isinstance(images, (list, tuple)):
             images = images[0]
-        
+
         images, labels, concepts = (
             images.to(model.device),
             labels.to(model.device),
@@ -164,6 +163,7 @@ def evaluate_metrics(
             else:
                 pc_pred = np.concatenate([pc_pred, o], axis=0)
 
+        _cf1 = 0
         if (
             args.dataset
             in [
@@ -190,8 +190,10 @@ def evaluate_metrics(
             "clipboia",
             "clipsddoia",
         ]:
-            
-            loss, ac, acc, f1 = SDDOIA_eval_tloss_cacc_acc(out_dict)
+            if cf1:
+                loss, ac, acc, f1, _cf1 = SDDOIA_eval_tloss_cacc_acc(out_dict, cf1=True)
+            else:
+                loss, ac, acc, f1 = SDDOIA_eval_tloss_cacc_acc(out_dict)
         elif args.dataset in [
             "xor",
         ]:
@@ -208,6 +210,7 @@ def evaluate_metrics(
             cacc += ac
             yacc += acc
             f1sc += f1
+            fcf1 += _cf1
 
     if apply_softmax:
         y_pred = softmax(y_pred, axis=1)
@@ -476,17 +479,19 @@ def KAND_eval_tloss_cacc_acc(out_dict, debug=True, cf1=False):
         return loss / len(objs), cacc * 100, acc * 100, f1 * 100
 
 
-def SDDOIA_eval_tloss_cacc_acc(out_dict):
+def SDDOIA_eval_tloss_cacc_acc(out_dict, cf1=False):
     """SDDOIA evaluation
 
     Args:
         out_dict (Dict[str]): dictionary of outputs
+        cf1 (bool, default=False): whether to compute concept F1
 
     Returns:
         loss: loss
         cacc: concept accuracy
         acc: label accuracy
         f1: f1 accuracy
+        cf1_score: concept f1 accuracy (only if cf1=True)
     """
     cs = out_dict["CS"]
     c_pred = (cs >= 0.5).to(torch.long)
@@ -511,7 +516,15 @@ def SDDOIA_eval_tloss_cacc_acc(out_dict):
     acc = accuracy_score(y_true.cpu().numpy(), y_pred_binary.cpu().numpy())
     f1 = f1_score(y_true.cpu().numpy(), y_pred_binary.cpu().numpy(), average="micro")
 
-    return loss, cacc * 100, acc * 100, f1 * 100
+    if cf1:
+        concept_f1 = f1_score(
+            c_true.cpu().numpy().flatten(),
+            c_pred.cpu().numpy().flatten(),
+            average="macro",
+        )
+        return loss, cacc * 100, acc * 100, f1 * 100, concept_f1 * 100
+    else:
+        return loss, cacc * 100, acc * 100, f1 * 100
 
 
 def XOR_eval_tloss_cacc_acc(out_dict, concepts):
