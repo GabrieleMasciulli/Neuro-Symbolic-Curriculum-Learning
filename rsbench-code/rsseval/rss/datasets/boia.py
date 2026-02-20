@@ -4,7 +4,12 @@ from datasets.utils.boia_creation import BOIADataset
 from datasets.utils.sddoia_creation import CONCEPTS_ORDER
 from backbones.boia_linear import BOIAConceptizer
 from backbones.boia_mlp import BOIAMLP
+from utils.risk_curriculum_sampler import (
+    MultilabelClassSpecificRiskCurriculumSampler,
+    MultilabelInstanceRiskCurriculumSampler,
+)
 import numpy as np
+import os
 import time
 
 
@@ -15,8 +20,6 @@ class BOIA(BaseDataset):
         super().__init__(args)
 
     def get_data_loaders(self):
-        import os
-
         start = time.time()
 
         # Get the directory where this file is located, then navigate to data folder
@@ -71,8 +74,63 @@ class BOIA(BaseDataset):
         )
         print(" len test:", len(self.dataset_test))
 
+        # ---- Curriculum learning setup ----
+        self.curriculum_sampler = None
+        self.concept_risks = None
+        train_sampler = None
+
+        if self.args.curriculum and self.args.risk_type:
+            if self.args.risk_type == "class":
+                risk_path = (
+                    f"class_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
+                if os.path.exists(risk_path):
+                    self.concept_risks = np.load(risk_path)
+                    print(f"\n--- Curriculum Learning Enabled (multilabel/class) ---")
+                    print(f"Loaded concept risks from {risk_path}")
+                    print(f"Concept Risks: {self.concept_risks}\n")
+                    self.curriculum_sampler = (
+                        MultilabelClassSpecificRiskCurriculumSampler(
+                            self.dataset_train,
+                            self.concept_risks,
+                            current_phase=1.0,
+                        )
+                    )
+                    train_sampler = self.curriculum_sampler
+                else:
+                    print(
+                        f"\nWarning: Curriculum enabled but risk file {risk_path} not found. "
+                        "Using default sampler."
+                    )
+
+            elif self.args.risk_type == "instance":
+                risk_path = (
+                    f"instance_specific_risks_{self.args.dataset}_{self.args.model}.npy"
+                )
+                if os.path.exists(risk_path):
+                    instance_risks = np.load(risk_path)
+                    self.instance_risks = instance_risks
+                    print(
+                        f"\n--- Instance-Specific Curriculum Learning Enabled (multilabel) ---"
+                    )
+                    print(f"Loaded instance risks from {risk_path}")
+                    self.curriculum_sampler = MultilabelInstanceRiskCurriculumSampler(
+                        self.dataset_train,
+                        self.instance_risks,
+                        current_phase=1.0,
+                    )
+                    train_sampler = self.curriculum_sampler
+                else:
+                    print(
+                        f"\nWarning: Curriculum enabled but risk file {risk_path} not found. "
+                        "Using default sampler."
+                    )
+
         self.train_loader = BOIA_get_loader(
-            self.dataset_train, self.args.batch_size, val_test=False
+            self.dataset_train,
+            self.args.batch_size,
+            val_test=False,
+            sampler=train_sampler,
         )
         self.val_loader = BOIA_get_loader(
             self.dataset_val, self.args.batch_size, val_test=True

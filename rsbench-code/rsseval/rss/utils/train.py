@@ -10,8 +10,11 @@ from tqdm import tqdm
 from torchvision.utils import make_grid
 from utils.wandb_logger import *
 from utils.status import progress_bar
-from datasets.utils.base_dataset import BaseDataset, get_loader
-from utils.class_specific_risk import compute_class_specific_risks_from_model
+from datasets.utils.base_dataset import BaseDataset, get_loader, BOIA_get_loader
+from utils.class_specific_risk import (
+    compute_class_specific_risks_from_model,
+    compute_multilabel_class_specific_risks_from_model,
+)
 from models.mnistdpl import MnistDPL
 from utils.dpl_loss import ADDMNIST_DPL
 from utils.metrics import (
@@ -458,12 +461,20 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
 
             # Update the curriculum sampler's phase and recreate the loader
             curriculum_sampler.current_phase = phase
-            train_loader = get_loader(
-                dataset.dataset_train,
-                args.batch_size,
-                val_test=False,
-                sampler=curriculum_sampler,
-            )
+            if args.task == "boia":
+                train_loader = BOIA_get_loader(
+                    dataset.dataset_train,
+                    args.batch_size,
+                    val_test=False,
+                    sampler=curriculum_sampler,
+                )
+            else:
+                train_loader = get_loader(
+                    dataset.dataset_train,
+                    args.batch_size,
+                    val_test=False,
+                    sampler=curriculum_sampler,
+                )
 
         ys, y_true, cs, cs_true = None, None, None, None
 
@@ -479,11 +490,18 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 all_epoch_real_concepts = dataset.dataset_train.real_concepts[
                     sampled_indices
                 ]
-                for concept_tuple in all_epoch_real_concepts:
-                    for concept in concept_tuple:
-                        epoch_concepts[int(concept)] = (
-                            epoch_concepts.get(int(concept), 0) + 1
-                        )
+                if args.task == "boia":
+                    # Multilabel: count how many samples have each concept active
+                    for concept_vec in all_epoch_real_concepts:
+                        for cidx, cval in enumerate(concept_vec):
+                            if int(cval) == 1:
+                                epoch_concepts[cidx] = epoch_concepts.get(cidx, 0) + 1
+                else:
+                    for concept_tuple in all_epoch_real_concepts:
+                        for concept in concept_tuple:
+                            epoch_concepts[int(concept)] = (
+                                epoch_concepts.get(int(concept), 0) + 1
+                            )
 
         for i, data in enumerate(train_loader):
             images, labels, concepts = data
@@ -547,7 +565,7 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 wandb_log_step(i, epoch, loss.item(), losses)
 
             if i % 10 == 0:
-                progress_bar(i, len(train_loader) - 9, epoch, loss.item())
+                progress_bar(i, max(len(train_loader) - 9, 1), epoch, loss.item())
 
         # Print summary of unique concepts shown in this epoch
         if (
@@ -558,7 +576,13 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
             print(f"\n=== Epoch {epoch} Concept Summary ===")
             for concept_id, count in sorted(epoch_concepts.items()):
                 print(f"  Concept {concept_id}: {count} samples")
-            print(f"Total unique concepts: {len(epoch_concepts.keys())} / 10")
+            if args.task == "boia":
+                num_total_concepts = dataset.dataset_train.real_concepts.shape[1]
+            else:
+                num_total_concepts = 10
+            print(
+                f"Total unique concepts: {len(epoch_concepts.keys())} / {num_total_concepts}"
+            )
             print("=" * 50)
 
         if args.task == "mnmath":
@@ -632,16 +656,25 @@ def train(model: MnistDPL, dataset: BaseDataset, _loss: ADDMNIST_DPL, args):
                 fprint(
                     f"\n--- Recomputing class-specific risks at epoch {epoch + 1} ---"
                 )
-                num_classes = 10 if args.dataset != "halfmnist" else 5
 
-                # Recompute risks on validation set
-                new_risks, partial_risk = compute_class_specific_risks_from_model(
-                    model,
-                    val_loader,
-                    args.dataset,
-                    num_classes=num_classes,
-                    verbose=True,
-                )
+                if args.task == "boia":
+                    # Multilabel per-concept risk recomputation
+                    num_concepts = dataset.dataset_train.real_concepts.shape[1]
+                    new_risks, _ = compute_multilabel_class_specific_risks_from_model(
+                        model,
+                        val_loader,
+                        num_concepts=num_concepts,
+                        verbose=True,
+                    )
+                else:
+                    num_classes = 10 if args.dataset != "halfmnist" else 5
+                    new_risks, partial_risk = compute_class_specific_risks_from_model(
+                        model,
+                        val_loader,
+                        args.dataset,
+                        num_classes=num_classes,
+                        verbose=True,
+                    )
 
                 # Update the curriculum sampler with new risks
                 dataset.concept_risks = new_risks

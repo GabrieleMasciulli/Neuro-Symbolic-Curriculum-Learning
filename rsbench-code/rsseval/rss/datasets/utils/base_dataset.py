@@ -128,13 +128,17 @@ def SDDOIA_get_loader(dataset, batch_size, num_workers=4, val_test=False):
         )
 
 
-def BOIA_get_loader(dataset, batch_size, val_test):
+def BOIA_get_loader(dataset, batch_size, val_test, sampler=None):
     if val_test:
         drop_last = False
         shuffle = False
     else:
         drop_last = True
         shuffle = True
+
+    # When a custom sampler is provided, shuffle must be False
+    if sampler is not None:
+        shuffle = False
 
     return DataLoader(
         dataset,
@@ -144,6 +148,7 @@ def BOIA_get_loader(dataset, batch_size, val_test):
         num_workers=8,
         pin_memory=True,
         persistent_workers=True,
+        sampler=sampler,
     )
 
 
