@@ -61,12 +61,12 @@ def compute_instance_specific_risks_from_model(model, dataloader, max_digit=9):
                 )  # e.g. for s=1, max_digit=4 returns [(0,1), (1,0)]
 
                 for y1, y2 in valid_pairs:
-                    prob_valid += (
-                        p1[y1] * p2[y2] / len(valid_pairs)
-                    )  # normalize by number of valid pairs
+                    prob_valid += p1[y1] * p2[y2]
 
                 # Risk = Probability of Constraint Violation
-                batch_risks.append(1.0 - prob_valid.item())
+                batch_risks.append(
+                    1.0 - prob_valid.item() / len(valid_pairs)
+                )  # normalize by number of valid pairs
 
             instance_risks.extend(batch_risks)
 
