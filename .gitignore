@@ -7,3 +7,5 @@ checkpoints/
 /wandb
 /scripts
 *.csv
+/wandb_run_results
+/run_results
