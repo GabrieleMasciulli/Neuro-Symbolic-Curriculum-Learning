@@ -1,6 +1,6 @@
 # Neuro-Symbolic Curriculum Learning
 
-This repository extends the [RSBench]([https://github.com/ema-marconato/rsbench](https://github.com/unitn-sml/rsbench-code)) codebase with data-centric strategies—**Curriculum Learning** and **Active Learning**—to mitigate **Reasoning Shortcuts (RSs)** in Neuro-Symbolic (NeSy) architectures trained via weak supervision. Experiments are conducted on MNIST-Half, Shortcut-MNIST, and BDD-OIA.
+This repository extends the [RSBench](https://github.com/unitn-sml/rsbench-code) codebase with data-centric strategies—**Curriculum Learning** and **Active Learning**—to mitigate **Reasoning Shortcuts (RSs)** in Neuro-Symbolic (NeSy) architectures trained via weak supervision. Experiments are conducted on MNIST-Half, Shortcut-MNIST, and BDD-OIA.
 
 ---
 
